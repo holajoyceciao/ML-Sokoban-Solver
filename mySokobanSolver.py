@@ -20,7 +20,7 @@ def my_team():
     e.g.  [ (1234567, 'Ada', 'Lovelace'), (1234568, 'Grace', 'Hopper'), (1234569, 'Eva', 'Tardos') ]
     '''
 
-    return [(11393611, 'Yu-Ying', 'Tang'), ('TBC', 'Arthur', 'Guillaume')]
+    return [(11393611, 'Yu-Ying', 'Tang'), (11371200, 'Arthur', 'Guillaume')]
  
 
 def taboo_cells(warehouse):
