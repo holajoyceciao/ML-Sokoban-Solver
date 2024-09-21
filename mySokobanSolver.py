@@ -20,7 +20,7 @@ def my_team():
     e.g.  [ (1234567, 'Ada', 'Lovelace'), (1234568, 'Grace', 'Hopper'), (1234569, 'Eva', 'Tardos') ]
     '''
 
-    return [(11393611, 'Yu-Ying', 'Tang'), (11371200, 'Arthur', 'Guillaume')]
+    raise NotImplementedError()
  
 
 def taboo_cells(warehouse):
@@ -79,8 +79,54 @@ class SokobanPuzzle(search.Problem):
     '''
     
     def __init__(self, warehouse):
-        raise NotImplementedError()
 
+        self.warehouse = warehouse
+
+        self.x_max = max([x for x, y in self.warehouse.walls])
+        self.x_min = min([x for x, y in self.warehouse.walls])
+
+        self.y_max = max([y for x, y in self.warehouse.walls])
+        self.y_min = min([y for x, y in self.warehouse.walls])
+
+        self.worker = warehouse.worker
+        self.boxes = list(warehouse.boxes)
+        self.walls = set(warehouse.walls)
+        self.targets = list(warehouse.targets)
+
+        self.goal = warehouse.targets 
+        self.initial =  (self.worker, self.boxes)
+    
+        self.initial = tuple(self.initial)# use tuple to make the state hashable
+        self.goal = tuple(self.goal) # use tuple to make the state hashable
+        #raise NotImplementedError()
+        
+  
+    def move_result(self, direction, state):
+        """
+        executes a move action
+        """
+        worker = state.worker
+        
+        new_worker_position= tuple(a+b for a, b in zip(worker, direction))
+        
+        return tuple((new_worker_position, state.boxes))
+    
+    def push_result(self,direction,state):
+        """
+        A push move, needs a direction, the boxe moves and the player.
+        """
+        worker = state.worker
+        boxes = state.boxes
+        
+        new_worker_position= self.move_result(direction, state)[0]
+        
+        new_box_position = tuple(a + b for a, b in zip(new_worker_position, direction))
+    
+        new_box_positions = boxes.remove(new_worker_position).append(new_box_position)
+    
+        return tuple((new_worker_position, new_box_positions))
+    
+    
     def actions(self, state):
         """
         Return the list of actions that can be executed in the given state.
@@ -89,8 +135,42 @@ class SokobanPuzzle(search.Problem):
         'self.allow_taboo_push' and 'self.macro' should be tested to determine
         what type of list of actions is to be returned.
         """
-        raise NotImplementedError
+        worker = state.worker
+        boxes = state.boxes
+        targets = state.targets
+        
+        actions = []
+        
+        directions = [(-1,0), (1,0), (0,-1), (0,1)]
+        for direction in directions:
+            new_worker_pos = self.move_result(direction, state)[0]
+            if new_worker_pos not in self.walls:
+                if new_worker_pos in boxes:
+                    if new_worker_pos not in targets:
+                        new_box_pos = tuple(a + b for a, b in zip(new_worker_pos, direction))
+                        print('new_box_pos', new_box_pos)
+                        if new_box_pos not in self.walls:
+                            actions.append((direction, 'p'))
+                else:
+                    actions.append((direction, 'm'))
+            
+        return actions
+        
+    def result(self,state, action):
+        direction, actionType  = action
+        if actionType=='p':
+            worker, boxes = self.push_result(direction, state)
+            return state.copy(worker, boxes)
+        elif actionType=="m":
+            worker, boxes = self.move_result(direction, state)
+            return state.copy(worker, boxes)
 
+    def goal_test(self,state):
+        for boxe in state.boxes:
+            if boxe not in state.targets:
+                return False
+        return True
+    
 
 def check_action_seq(warehouse, action_seq):
     '''
@@ -119,6 +199,7 @@ def check_action_seq(warehouse, action_seq):
     ##         "INSERT YOUR CODE HERE"
     
     raise NotImplementedError()
+
 
 
 def solve_sokoban_elem(warehouse):
@@ -152,8 +233,9 @@ def can_go_there(warehouse, dst):
       True if the worker can walk to cell dst=(row,column) without pushing any box
       False otherwise
     '''
-    
     ##         "INSERT YOUR CODE HERE"
+    x, y = dst
+    
     
     raise NotImplementedError()
 
