@@ -44,8 +44,56 @@ def taboo_cells(warehouse):
        The returned string should NOT have marks for the worker, the targets,
        and the boxes.  
     '''
-    ##         "INSERT YOUR CODE HERE"    
-    raise NotImplementedError()
+    ##         "INSERT YOUR CODE HERE"  
+    warehouse_layout = str(warehouse).splitlines()
+    rows, cols = len(warehouse_layout), len(warehouse_layout[0])
+    matrix = [['']*cols for _ in range(rows)]
+
+    # Create 2D matrix for warehouse
+    for r in range(rows):
+        for c in range(cols):
+            matrix[r][c] = warehouse_layout[r][c]
+
+    # Check valid region
+    for r in range(rows):
+        l_pointer = 0
+        r_pointer = cols - 1
+        while l_pointer < cols and matrix[r][l_pointer] != '#':
+            if matrix[r][l_pointer] == ' ':
+                matrix[r][l_pointer] = 'NA'
+            l_pointer += 1
+
+        while r_pointer >= 0 and matrix[r][r_pointer] != '#':
+            if matrix[r][r_pointer] == ' ':
+                matrix[r][r_pointer] = 'NA'
+            r_pointer -= 1 
+    
+    # Check the taboo
+    for r in range(rows):
+        for c in range(cols):
+            if matrix[r][c] != '.' and matrix[r][c] != 'NA' and matrix[r][c] != '#':
+                # top left
+                if r > 0 and c > 0 and matrix[r - 1][c] == '#' and matrix[r][c - 1] == '#':
+                    matrix[r][c] = 'X'
+                # top right
+                if r > 0 and c + 1 < cols and matrix[r - 1][c] == '#' and matrix[r][c + 1] == '#':
+                    matrix[r][c] = 'X'
+                # bottom left
+                if r + 1 < rows and c > 0 and matrix[r + 1][c] == '#' and matrix[r][c - 1] == '#':
+                    matrix[r][c] = 'X'
+                # bottom right
+                if r + 1 < rows and c + 1 < cols and matrix[r + 1][c] == '#' and matrix[r][c + 1] == '#':
+                    matrix[r][c] = 'X'
+                    
+            # remove other symbols        
+            if matrix[r][c] in '.*@$':
+                matrix[r][c] = ' '
+
+            # change NA back to ''        
+            if matrix[r][c] in 'NA':
+                matrix[r][c] = ' '
+
+    return '\n'.join([''.join(row) for row in matrix])
 
 
 class SokobanPuzzle(search.Problem):
