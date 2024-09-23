@@ -170,7 +170,8 @@ class SokobanPuzzle(search.Problem):
             if boxe not in state.targets:
                 return False
         return True
-    
+
+
 
 def check_action_seq(warehouse, action_seq):
     '''
@@ -221,6 +222,34 @@ def solve_sokoban_elem(warehouse):
     
     raise NotImplementedError()
 
+def dfs(matrix, source, target, visited=None):
+    '''
+    A function that search a matrix of movements, return true if the target is accessible from the origin
+    '''
+    x, y = source
+
+    print(f"Source: {source}, Target: {target}, Equal: {source == target}")
+    if visited is None:
+        visited = set()
+    if source == target:
+        return True
+    visited.add(source)
+    print(visited)
+    
+    rows = len(matrix)
+    cols = len(matrix[0])
+    
+    directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+
+    for direction in directions:
+        nx, ny = x + direction[0], y + direction[1]
+        if 0<=nx <rows and 0 <= ny < cols:
+            neighbor = (nx, ny)
+            if matrix[nx][ny] == 0 and neighbor not in visited:  
+                if dfs(matrix, neighbor, target, visited): 
+                    return True
+    return False
+
 
 def can_go_there(warehouse, dst):
     '''    
@@ -234,10 +263,30 @@ def can_go_there(warehouse, dst):
       False otherwise
     '''
     ##         "INSERT YOUR CODE HERE"
-    x, y = dst
+    y, x = warehouse.worker
+    x1, y1 = dst
+    target = tuple((x+x1, y+y1))
+    x_max = max([x for x, y in warehouse.walls])
+    x_min = min([x for x, y in warehouse.walls])
+
+    y_max = max([y for x, y in warehouse.walls])
+    y_min = min([y for x, y in warehouse.walls])
+
+    dist = tuple((x_max-x_min, y_max-y_min))
+     
+    matrix = [[0 for _ in range(dist[0] + 1)] for _ in range(dist[1] + 1)]
+
+    for wall_x, wall_y in warehouse.walls:
+        matrix[wall_y - y_min][wall_x - x_min]  = 1 
+
+    for box_x, box_y in warehouse.boxes:
+        matrix[box_y - y_min][box_x - x_min] = 1 
     
     
-    raise NotImplementedError()
+    for row in matrix:
+        print(row)
+            
+    return dfs(matrix, tuple((x,y)), target)
 
 def solve_sokoban_macro(warehouse):
     '''    
