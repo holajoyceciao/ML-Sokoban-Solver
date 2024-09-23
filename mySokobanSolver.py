@@ -127,6 +127,13 @@ class SokobanPuzzle(search.Problem):
     '''
     
     def __init__(self, warehouse):
+        self.warehouse = warehouse
+        self.walls = []
+        self.target = None
+        self.boxes = []
+        self.walker = None
+        self.allow_taboo_push = False
+        self.macro = False
         raise NotImplementedError()
 
     def actions(self, state):
@@ -137,8 +144,17 @@ class SokobanPuzzle(search.Problem):
         'self.allow_taboo_push' and 'self.macro' should be tested to determine
         what type of list of actions is to be returned.
         """
+        if self.allow_taboo_push:
+            pass
+        if self.macro:
+            pass
         raise NotImplementedError
 
+    def result(self):
+        raise NotImplementedError
+    
+    def goal_test(self):
+        raise NotImplementedError
 
 def check_action_seq(warehouse, action_seq):
     '''
@@ -165,9 +181,84 @@ def check_action_seq(warehouse, action_seq):
     '''
     
     ##         "INSERT YOUR CODE HERE"
-    
-    raise NotImplementedError()
+    warehouse_layout = str(warehouse).splitlines()
+    rows, cols = len(warehouse_layout), len(warehouse_layout[0])
+    matrix = [['']*cols for _ in range(rows)]
 
+    # Create 2D matrix for warehouse
+    for r in range(rows):
+        for c in range(cols):
+            matrix[r][c] = warehouse_layout[r][c]
+
+    # define the initial positions of variables 
+    walls, boxes, targets = [], [], []
+    worker = ()
+    for r in range(rows):
+        for c in range(cols):
+            # initial position
+            if matrix[r][c] == '#':
+                walls.append((r,c))
+            elif matrix[r][c] == '$':
+                boxes.append((r,c))
+            elif matrix[r][c] == '.':
+                targets.append((r,c))
+            elif matrix[r][c] == '*': # box on a target
+                targets.append((r,c))  
+                boxes.append((r,c))  
+            elif matrix[r][c] == '@':
+                worker = (r,c)
+
+    # define the directions
+    move_dic = {
+        'Left': (0, -1),
+        'Right': (0, 1),
+        'Top': (-1, 0),
+        'Down': (1, 0)
+    }
+
+    # Check the action in seq is valid or not
+    for action in action_seq:
+        if action not in move_dic:
+            return "Failure"
+    
+        # worker next move
+        worker_row, worker_col = worker
+        dic_x, dic_y = move_dic[action]
+        next_move = (worker_row + dic_x, worker_col + dic_y)
+
+        # check if next move is the wall
+        if next_move in walls:
+            return "Failure"
+        
+        # check if next move is the box
+        if next_move in boxes:
+            box_next_position = (next_move[0] + dic_x, next_move[1] + dic_y)
+            # check the box’s next position is a wall or a box 
+            if box_next_position in walls or box_next_position in boxes:
+                return "Failure"
+            # push the box
+            else:
+                boxes.remove(next_move)
+                boxes.append(box_next_position)
+        # update worker's position
+        worker = next_move
+
+    # update worker's position in the matrix
+    # clear all the related signs
+    for r in range(rows):
+        for c in range(cols):
+            if matrix[r][c] == '$' or matrix[r][c] == '@' or matrix[r][c] == '*':
+                matrix[r][c] = ' '
+    # update worker's position
+    matrix[worker[0]][worker[1]] = '@'
+    # update boxes' and targets' positions
+    for box in boxes:
+        if box in targets:
+            matrix[box[0]][box[1]] = '*'
+        else:
+            matrix[box[0]][box[1]] = '$'
+
+    return '\n'.join([''.join(row) for row in matrix])
 
 def solve_sokoban_elem(warehouse):
     '''    
@@ -185,7 +276,7 @@ def solve_sokoban_elem(warehouse):
     '''
     
     ##         "INSERT YOUR CODE HERE"
-    
+    print(warehouse)
     raise NotImplementedError()
 
 
