@@ -12,6 +12,7 @@ interface and triggers to a fail for the test of your code.
 
 import search
 import sokoban
+import time 
 
 def my_team():
     '''
@@ -94,7 +95,7 @@ class SokobanPuzzle(search.Problem):
         self.targets = list(warehouse.targets)
 
         self.goal = warehouse.targets 
-        self.initial =  (self.worker, self.boxes)
+        self.initial =  (tuple((self.worker)), tuple((self.boxes)))
     
         self.initial = tuple(self.initial)# use tuple to make the state hashable
         self.goal = tuple(self.goal) # use tuple to make the state hashable
@@ -105,26 +106,27 @@ class SokobanPuzzle(search.Problem):
         """
         executes a move action
         """
-        worker = state.worker
+        worker = state[0]
         
         new_worker_position= tuple(a+b for a, b in zip(worker, direction))
         
-        return tuple((new_worker_position, state.boxes))
+        return tuple((new_worker_position, state[1]))
     
     def push_result(self,direction,state):
         """
         A push move, needs a direction, the boxe moves and the player.
         """
-        worker = state.worker
-        boxes = state.boxes
-        
+        worker, boxes = state
+        boxes = list(boxes)
         new_worker_position= self.move_result(direction, state)[0]
         
         new_box_position = tuple(a + b for a, b in zip(new_worker_position, direction))
     
-        new_box_positions = boxes.remove(new_worker_position).append(new_box_position)
+        boxes.remove(new_worker_position)
+        boxes.append(new_box_position)
+        
     
-        return tuple((new_worker_position, new_box_positions))
+        return tuple((new_worker_position, tuple(boxes)))
     
     
     def actions(self, state):
@@ -135,22 +137,23 @@ class SokobanPuzzle(search.Problem):
         'self.allow_taboo_push' and 'self.macro' should be tested to determine
         what type of list of actions is to be returned.
         """
-        worker = state.worker
-        boxes = state.boxes
-        targets = state.targets
+        worker, boxes = state
+        targets = self.goal
         
         actions = []
         
         directions = [(-1,0), (1,0), (0,-1), (0,1)]
         for direction in directions:
             new_worker_pos = self.move_result(direction, state)[0]
+            #spot where the worker will be
             if new_worker_pos not in self.walls:
+                #check that worker is not in a wall
                 if new_worker_pos in boxes:
-                    if new_worker_pos not in targets:
-                        new_box_pos = tuple(a + b for a, b in zip(new_worker_pos, direction))
-                        print('new_box_pos', new_box_pos)
-                        if new_box_pos not in self.walls:
-                            actions.append((direction, 'p'))
+                    #if the new position in a box, it means the action can only be a pushed
+                    new_box_pos = tuple(a + b for a, b in zip(new_worker_pos, direction))
+                    if new_box_pos not in self.walls and new_box_pos not in boxes:
+                        #the move is legal if the box is not pushed on a box or a wall
+                        actions.append((direction, 'p'))
                 else:
                     actions.append((direction, 'm'))
             
@@ -159,18 +162,25 @@ class SokobanPuzzle(search.Problem):
     def result(self,state, action):
         direction, actionType  = action
         if actionType=='p':
-            worker, boxes = self.push_result(direction, state)
-            return state.copy(worker, boxes)
+            return self.push_result(direction, state)
         elif actionType=="m":
-            worker, boxes = self.move_result(direction, state)
-            return state.copy(worker, boxes)
+            return self.move_result(direction, state)
 
-    def goal_test(self,state):
-        for boxe in state.boxes:
-            if boxe not in state.targets:
-                return False
-        return True
+    def goal_test(self, state):
+        boxes = state[1]
+        return set(boxes) == set(self.goal)
 
+    def print_solution(self, goal_node):
+
+        path = goal_node.path()
+
+        print( f"Solution takes {len(path)-1} steps from the initial state to the goal state\n")
+        print( "Below is the sequence of moves\n")
+        moves = []
+        for node in path:
+            if node.action:
+                moves += [f"{node.action}, "]
+        print(moves)
 
 
 def check_action_seq(warehouse, action_seq):
@@ -220,7 +230,21 @@ def solve_sokoban_elem(warehouse):
     
     ##         "INSERT YOUR CODE HERE"
     
-    raise NotImplementedError()
+    solver = SokobanPuzzle(warehouse)
+
+    search_type = 'bfs'
+    
+    if search_type == 'bfs':
+        # Solve with Breadth First Search
+        sol_ts = search.breadth_first_graph_search(solver)
+    else:
+        #Solve with Depth First Search
+        sol_ts = search.depth_first_graph_search(solver)
+        
+    print(sol_ts)
+    solver.print_solution(sol_ts)
+    
+    return sol_ts
 
 def dfs(matrix, source, target, visited=None):
     '''
@@ -308,6 +332,7 @@ def solve_sokoban_macro(warehouse):
     '''
     
     ##         "INSERT YOUR CODE HERE"
+
     
     raise NotImplementedError()
 
