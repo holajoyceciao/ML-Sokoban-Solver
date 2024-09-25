@@ -79,10 +79,10 @@ class SokobanPuzzle(search.Problem):
     
     '''
     
-    def __init__(self, warehouse):
-
+    def __init__(self, warehouse, goal=None, can_push=True):
+        
         self.warehouse = warehouse
-
+        self.can_push = can_push
         self.x_max = max([x for x, y in self.warehouse.walls])
         self.x_min = min([x for x, y in self.warehouse.walls])
 
@@ -90,18 +90,14 @@ class SokobanPuzzle(search.Problem):
         self.y_min = min([y for x, y in self.warehouse.walls])
 
         self.worker = warehouse.worker
-        self.boxes = list(warehouse.boxes)
+        self.boxes = set(warehouse.boxes)
         self.walls = set(warehouse.walls)
-        self.targets = list(warehouse.targets)
+        self.targets = set(warehouse.targets)
 
-        self.goal = warehouse.targets 
-        self.initial =  (tuple((self.worker)), tuple((self.boxes)))
-    
-        self.initial = tuple(self.initial)# use tuple to make the state hashable
-        self.goal = tuple(self.goal) # use tuple to make the state hashable
-        #raise NotImplementedError()
+        self.goal = goal
+        self.initial =  tuple((self.worker)), tuple((self.boxes))# use tuple to make the state hashable
+        self.targets = tuple(self.targets) # use tuple to make the state hashable
         
-  
     def move_result(self, direction, state):
         """
         executes a move action
@@ -117,7 +113,6 @@ class SokobanPuzzle(search.Problem):
         A push move, needs a direction, the boxe moves and the player.
         """
         worker, boxes = state
-        boxes = list(boxes)
         new_worker_position= self.move_result(direction, state)[0]
         
         new_box_position = tuple(a + b for a, b in zip(new_worker_position, direction))
@@ -138,25 +133,34 @@ class SokobanPuzzle(search.Problem):
         what type of list of actions is to be returned.
         """
         worker, boxes = state
-        targets = self.goal
-        
         actions = []
-        
+        #(row, column)
+        # Directions: (-1, 0) = left, (1, 0) = right, (0, -1) = down, (0, 1) = up
         directions = [(-1,0), (1,0), (0,-1), (0,1)]
         for direction in directions:
             new_worker_pos = self.move_result(direction, state)[0]
-            #spot where the worker will be
-            if new_worker_pos not in self.walls:
-                #check that worker is not in a wall
-                if new_worker_pos in boxes:
-                    #if the new position in a box, it means the action can only be a pushed
-                    new_box_pos = tuple(a + b for a, b in zip(new_worker_pos, direction))
-                    if new_box_pos not in self.walls and new_box_pos not in boxes:
-                        #the move is legal if the box is not pushed on a box or a wall
-                        actions.append((direction, 'p'))
-                else:
-                    actions.append((direction, 'm'))
+            # If the new worker position is in a wall, skip to the next direction
+            if new_worker_pos in self.walls:
+                continue
             
+            # If the new worker position is in a box
+            if new_worker_pos in boxes:
+                # Check if pushing the box is allowed
+                if not self.can_push:
+                    continue
+                
+                # Determine the new box position after pushing
+                new_box_pos = tuple(a + b for a, b in zip(new_worker_pos, direction))
+                
+                # If the new box position is in a wall or another box, skip this direction
+                if new_box_pos in self.walls or new_box_pos in boxes:
+                    continue
+                
+                # The move is legal, append it as a push action
+                actions.append((direction, 'p'))
+            else:
+                # If the new position is not a wall or a box, append it as a move action
+                actions.append((direction, 'm'))
         return actions
         
     def result(self,state, action):
@@ -167,8 +171,11 @@ class SokobanPuzzle(search.Problem):
             return self.move_result(direction, state)
 
     def goal_test(self, state):
-        boxes = state[1]
-        return set(boxes) == set(self.goal)
+        worker, boxes = state
+        if self.goal is not None:
+            return worker == self.goal
+        else:
+            return set(boxes) == self.targets
 
     def print_solution(self, goal_node):
 
@@ -229,56 +236,23 @@ def solve_sokoban_elem(warehouse):
     '''
     
     ##         "INSERT YOUR CODE HERE"
+
     
     solver = SokobanPuzzle(warehouse)
 
-    search_type = 'bfs'
-    
-    if search_type == 'bfs':
-        # Solve with Breadth First Search
-        sol_ts = search.breadth_first_graph_search(solver)
-    else:
-        #Solve with Depth First Search
-        sol_ts = search.depth_first_graph_search(solver)
-        
-    print(sol_ts)
-    solver.print_solution(sol_ts)
+    sol_ts = search.breadth_first_graph_search(solver)
     
     return sol_ts
 
-def dfs(matrix, source, target, visited=None):
-    '''
-    A function that search a matrix of movements, return true if the target is accessible from the origin
-    '''
-    x, y = source
-
-    print(f"Source: {source}, Target: {target}, Equal: {source == target}")
-    if visited is None:
-        visited = set()
-    if source == target:
-        return True
-    visited.add(source)
-    print(visited)
-    
-    rows = len(matrix)
-    cols = len(matrix[0])
-    
-    directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-
-    for direction in directions:
-        nx, ny = x + direction[0], y + direction[1]
-        if 0<=nx <rows and 0 <= ny < cols:
-            neighbor = (nx, ny)
-            if matrix[nx][ny] == 0 and neighbor not in visited:  
-                if dfs(matrix, neighbor, target, visited): 
-                    return True
-    return False
 
 
 def can_go_there(warehouse, dst):
     '''    
     Determine whether the worker can walk to the cell dst=(row,column) 
+    switch because the row is y and column i s x
     without pushing any box.
+
+    overRide the Sokoban Solver, changes the goal and the goal_test
     
     @param warehouse: a valid Warehouse object
 
@@ -286,31 +260,14 @@ def can_go_there(warehouse, dst):
       True if the worker can walk to cell dst=(row,column) without pushing any box
       False otherwise
     '''
+    goal = (dst[1], dst[0])
     ##         "INSERT YOUR CODE HERE"
-    y, x = warehouse.worker
-    x1, y1 = dst
-    target = tuple((x+x1, y+y1))
-    x_max = max([x for x, y in warehouse.walls])
-    x_min = min([x for x, y in warehouse.walls])
-
-    y_max = max([y for x, y in warehouse.walls])
-    y_min = min([y for x, y in warehouse.walls])
-
-    dist = tuple((x_max-x_min, y_max-y_min))
-     
-    matrix = [[0 for _ in range(dist[0] + 1)] for _ in range(dist[1] + 1)]
-
-    for wall_x, wall_y in warehouse.walls:
-        matrix[wall_y - y_min][wall_x - x_min]  = 1 
-
-    for box_x, box_y in warehouse.boxes:
-        matrix[box_y - y_min][box_x - x_min] = 1 
-    
-    
-    for row in matrix:
-        print(row)
+    goThereSolver = SokobanPuzzle(warehouse, goal=goal, can_push=False)
             
-    return dfs(matrix, tuple((x,y)), target)
+    sol_ts = search.breadth_first_graph_search(goThereSolver)
+    return sol_ts is not None
+
+
 
 def solve_sokoban_macro(warehouse):
     '''    
