@@ -79,7 +79,7 @@ class SokobanPuzzle(search.Problem):
     
     '''
     
-    def __init__(self, warehouse, goal=None, can_push=True):
+    def __init__(self, warehouse, goal=None, can_push=True, use_macro=False):
         
         self.warehouse = warehouse
         self.can_push = can_push
@@ -90,12 +90,19 @@ class SokobanPuzzle(search.Problem):
         self.y_min = min([y for x, y in self.warehouse.walls])
 
         self.worker = warehouse.worker
-        self.boxes = set(warehouse.boxes)
+        self.boxes = warehouse.boxes
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
 
+        self.action_dict = {
+            'Up' : tuple((0,-1)),
+            'Down' : tuple((0,1)),
+            'Right' : tuple((1,0)),
+            'Left' : tuple((-1,0))
+        }
+
         self.goal = goal
-        self.initial =  tuple((self.worker)), tuple((self.boxes))# use tuple to make the state hashable
+        self.initial =  tuple((self.worker, tuple(self.boxes)))# use tuple to make the state hashable
         self.targets = tuple(self.targets) # use tuple to make the state hashable
         
     def move_result(self, direction, state):
@@ -121,7 +128,7 @@ class SokobanPuzzle(search.Problem):
         boxes.append(new_box_position)
         
     
-        return tuple((new_worker_position, tuple(boxes)))
+        return tuple((new_worker_position, boxes))
     
     
     def actions(self, state):
@@ -175,7 +182,7 @@ class SokobanPuzzle(search.Problem):
         if self.goal is not None:
             return worker == self.goal
         else:
-            return set(boxes) == self.targets
+            return set(boxes) == set(self.targets)
 
     def print_solution(self, goal_node):
 
@@ -186,9 +193,10 @@ class SokobanPuzzle(search.Problem):
         moves = []
         for node in path:
             if node.action:
-                moves += [f"{node.action}, "]
-        print(moves)
-
+                moves.append(node.action)
+        return(moves)
+        ######################## Macro#############
+        
 
 def check_action_seq(warehouse, action_seq):
     '''
@@ -260,8 +268,10 @@ def can_go_there(warehouse, dst):
       True if the worker can walk to cell dst=(row,column) without pushing any box
       False otherwise
     '''
-    goal = (dst[1], dst[0])
+   
     ##         "INSERT YOUR CODE HERE"
+    goal = (dst[1], dst[0])
+    
     goThereSolver = SokobanPuzzle(warehouse, goal=goal, can_push=False)
             
     sol_ts = search.breadth_first_graph_search(goThereSolver)
@@ -287,9 +297,55 @@ def solve_sokoban_macro(warehouse):
         Otherwise return M a sequence of macro actions that solves the puzzle.
         If the puzzle is already in a goal state, simply return []
     '''
+     
     
     ##         "INSERT YOUR CODE HERE"
-
+    #find reachable box       
+    class solveSokoMacro(SokobanPuzzle):
+        
+        def result(self, state, action):
+            worker, boxes = state
+            box, direction = action
+            box = (box[1], box[0])
+            
+        
+            new_box = tuple(a+b for a , b in zip(self.action_dict[direction], box))
+            boxes_list = list(boxes)
+            boxes_list.remove(box)
+            boxes_list.append(new_box)
+            new_worker = box
+            return tuple((new_worker, tuple(boxes_list)))
+        
+            
+            
+            
+        def actions(self, state):
+            worker, boxes =state
+            actions = []
+            
+            for box in boxes:
+                #check all tiles adjacent to the box
+                for key, direction in self.action_dict.items():
+                    #position of the worker next to the box
+                    worker_pos = tuple(a-b for a,b in zip(box, direction))
+                    #create a new warehouse with the current position of the worker before any move
+                    new_warehouse = self.warehouse.copy(worker=worker, boxes=boxes)
+                    #check if the worker can go there, targer is y, x so needs to be inverted
+                    if can_go_there(new_warehouse, tuple((worker_pos[1], worker_pos[0]))):
+                        
+                        new_box_pos = tuple(a+b for a,b in zip(box, direction))
+        
+                        if new_box_pos not in self.walls and new_box_pos not in boxes:
+                            #again, the output needs to be y, x
+                            actions.append(tuple(((box[1], box[0]), key)))
+            return actions
+              
+    macroSolver = solveSokoMacro(warehouse)
+    sol_ts = search.breadth_first_graph_search(macroSolver)
+    if sol_ts is not None:
+        return macroSolver.print_solution(sol_ts)
+    else:
+        return "Impossible"
     
-    raise NotImplementedError()
+    
 
