@@ -46,60 +46,99 @@ def taboo_cells(warehouse):
     '''
     ##         "INSERT YOUR CODE HERE"  
 
-    # making warehouse into matrix for easy management
-    warehouse_layout = str(warehouse).splitlines()
-    rows, cols = len(warehouse_layout), len(warehouse_layout[0])
-    matrix = [['']*cols for _ in range(rows)]
+    # retrieving warehouse
+    warehouse = str(warehouse).split('\n')
+    warehouse = [list(row) for row in warehouse]
+    rows, cols = len(warehouse), len(warehouse[0])
 
-    # representing matrix as warehouse
+    # mark out of boundary position as NA
+    ## left and right detection
+    for r in range(rows):
+        # from left
+        l_ptr = 0
+        while l_ptr < cols and warehouse[r][l_ptr] != '#':
+            if warehouse[r][l_ptr] == ' ':
+                warehouse[r][l_ptr] = 'NA'
+            l_ptr += 1
+
+        # from right
+        r_ptr = cols - 1
+        while r_ptr >= 0 and warehouse[r][r_ptr] != '#':
+            if warehouse[r][r_ptr] == ' ':
+                warehouse[r][r_ptr] = 'NA'
+            r_ptr -= 1
+
+    ## top and bottom detection
+    for c in range(cols):
+        # from top
+        t_ptr = 0
+        while t_ptr < rows and warehouse[t_ptr][c] != '#':
+            if warehouse[t_ptr][c] == ' ':
+                warehouse[t_ptr][c] = 'NA'
+            t_ptr += 1
+
+        # from bottom
+        b_ptr = rows - 1
+        while b_ptr >= 0 and warehouse[b_ptr][c] != '#':
+            if warehouse[b_ptr][c] == ' ':
+                warehouse[b_ptr][c] = 'NA'
+            b_ptr -= 1
+
+    # rule 1: mark taboo cell at corners
     for r in range(rows):
         for c in range(cols):
-            matrix[r][c] = warehouse_layout[r][c]
+            if warehouse[r][c] not in ('.', 'NA', '#'):
+                # top-left
+                if r > 0 and c > 0 and warehouse[r - 1][c] == '#' and warehouse[r][c - 1] == '#':
+                    warehouse[r][c] = 'X'
+                # top-right
+                if r > 0 and c + 1 < cols and warehouse[r - 1][c] == '#' and warehouse[r][c + 1] == '#':
+                    warehouse[r][c] = 'X'
+                # bottom-left
+                if r + 1 < rows and c > 0 and warehouse[r + 1][c] == '#' and warehouse[r][c - 1] == '#':
+                    warehouse[r][c] = 'X'
+                # bottom-right
+                if r + 1 < rows and c + 1 < cols and warehouse[r + 1][c] == '#' and warehouse[r][c + 1] == '#':
+                    warehouse[r][c] = 'X'
 
-
-    # mark the out of bound region as NA
+    # Rule 2: mark taboo cells between two corners along walls
+    ## horizontal detection (left to right)
     for r in range(rows):
-        l_pointer = 0
-        r_pointer = cols - 1
-        while l_pointer < cols and matrix[r][l_pointer] != '#':
-            if matrix[r][l_pointer] == ' ':
-                matrix[r][l_pointer] = 'NA'
-            l_pointer += 1
+        left_corner = -1
+        for c in range(cols):
+            if warehouse[r][c] == 'X':  # Found a corner
+                if left_corner == -1:
+                    left_corner = c
+                else:
+                    # check if all cells between the corners are empty spaces and not targets
+                    if all(warehouse[r][i] == ' ' for i in range(left_corner + 1, c)) and all(warehouse[r][i] not in '.' for i in range(left_corner + 1, c)):
+                        for i in range(left_corner + 1, c):
+                            warehouse[r][i] = 'X'
+                    left_corner = c
 
-        while r_pointer >= 0 and matrix[r][r_pointer] != '#':
-            if matrix[r][r_pointer] == ' ':
-                matrix[r][r_pointer] = 'NA'
-            r_pointer -= 1 
+    # vertical detection (top to bottom)
+    for c in range(cols):
+        top_corner = -1
+        for r in range(rows):
+            if warehouse[r][c] == 'X':  # Found a corner
+                if top_corner == -1:
+                    top_corner = r
+                else:
+                    # check if all cells between the corners are empty spaces and not targets
+                    if all(warehouse[i][c] == ' ' for i in range(top_corner + 1, r)) and all(warehouse[i][c] not in '.' for i in range(top_corner + 1, r)):
+                        for i in range(top_corner + 1, r):
+                            warehouse[i][c] = 'X'
+                    top_corner = r
 
-
-    # check taboo cell
+    # remove other symbols and swap 'NA' back to empty spaces
     for r in range(rows):
         for c in range(cols):
-            if matrix[r][c] != '.' and matrix[r][c] != 'NA' and matrix[r][c] != '#':
-                # top left
-                if r > 0 and c > 0 and matrix[r - 1][c] == '#' and matrix[r][c - 1] == '#':
-                    matrix[r][c] = 'X'
-                # top right
-                if r > 0 and c + 1 < cols and matrix[r - 1][c] == '#' and matrix[r][c + 1] == '#':
-                    matrix[r][c] = 'X'
-                # bottom left
-                if r + 1 < rows and c > 0 and matrix[r + 1][c] == '#' and matrix[r][c - 1] == '#':
-                    matrix[r][c] = 'X'
-                # bottom right
-                if r + 1 < rows and c + 1 < cols and matrix[r + 1][c] == '#' and matrix[r][c + 1] == '#':
-                    matrix[r][c] = 'X'
-                    
-            # remove other symbols        
-            if matrix[r][c] in '.*@$':
-                matrix[r][c] = ' '
+            if warehouse[r][c] in '.*@$':
+                warehouse[r][c] = ' '
+            if warehouse[r][c] == 'NA':
+                warehouse[r][c] = ' '
 
-            # change NA back to ' '        
-            if matrix[r][c] in 'NA':
-                matrix[r][c] = ' '
-
-
-    return '\n'.join([''.join(row) for row in matrix])
-
+    return '\n'.join([''.join(row) for row in warehouse])
 
 class SokobanPuzzle(search.Problem):
     '''
@@ -130,81 +169,60 @@ class SokobanPuzzle(search.Problem):
     '''
     
     def __init__(self, warehouse, allow_taboo_push=False, macro=False):
-        # define directions for the worker to move
-        self.directions = [(-1, 0, 'Up'), (1, 0, 'Down'), (0, -1, 'Left'), (0, 1, 'Right')]
+        # directions to move in (x, y) -> NOTE: origin at TOP-LEFT
+        self.directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
 
-        # note the key state of the warehouse
+        # retrieve key state of the warehouse
         self.walls = set()
         self.targets = set()
         self.boxes = set()
         self.worker = tuple()
+        self.define_game_state(warehouse)
+        
+        # get maximum game boundaries
+        ## compute number of rows and columns from the layout by joining sets and get maximum
+        all_positions = self.walls | self.boxes | self.targets | {self.worker}
+        self.nys = max(y for _, y in all_positions) + 1
+        self.nxs = max(x for x, _ in all_positions) + 1
 
-        # making warehouse a matrix
-        self.warehouse = warehouse
-        self.matrix = self.create_matrix(warehouse)
+        # get taboo cell from the function to know if a position is 'X'
+        self.taboo_layout = taboo_cells(warehouse).splitlines()
 
         # save the state for type of movement
         self.allow_taboo_push = allow_taboo_push
         self.macro = macro
 
         # save the original state for the warehouse
-        self.initial = (self.worker, frozenset(self.boxes))
+        super().__init__((self.worker, frozenset(self.boxes)))
 
-    def create_matrix(self, warehouse):
-        # turning warehouse into matrix
-        warehouse_layout = str(warehouse).splitlines()
-        rows, cols = len(warehouse_layout), len(warehouse_layout[0])
-        matrix = [[' '] * cols for _ in range(rows)]
-
-        # make note on key areas
-        for r in range(rows):
-            for c in range(cols):
-                cur = warehouse_layout[r][c]
-                matrix[r][c] = cur
-
-                if cur == '#':
-                    self.walls.add((r, c))
-                elif cur == '.':
-                    self.targets.add((r, c))
-                elif cur == '$':
-                    self.boxes.add((r, c))
-                elif cur == '*':
-                    self.boxes.add((r, c))
-                    self.targets.add((r, c))
-                elif cur == '@':
-                    self.worker = (r, c)
-                elif cur == '!':
-                    self.worker = (r, c)
-                    self.targets.add((r, c))
-
-        return matrix
+    def define_game_state(self, warehouse):
+        # retrieve states from the warehouse
+        self.walls = set(warehouse.walls)
+        self.targets = set(warehouse.targets)
+        self.boxes = set(warehouse.boxes)
+        self.worker = warehouse.worker
 
     def actions(self, state):
         """
         Return the list of actions that can be executed in the given state.
         """
-        # get current worker position from the state
-        ## worker = (r, c); boxes (hashset) = {(r, c), (r, c) ...} -> They are the LATEST state not initial
+        # get CURRENT worker position from the state
+        ## worker = (x, y); boxes (hashset) = {(x, y), (x, y) ...} -> They are the LATEST state not initial
         worker, boxes = state
-        r, c = worker
-
-        # total game map dimensions from length of matrix
-        rows, cols = len(self.matrix), len(self.matrix[0])
-
-        # get taboo cell from the function to know if a position is 'X'
-        taboo_layout = taboo_cells(self.warehouse).splitlines()
+        x, y = worker
 
         # legal action for the worker
         possible_actions = []
 
-        # iterate over 4 directions [(-1, 0, 'Up'), (1, 0, 'Down'), (0, -1, 'Left'), (0, 1, 'Right')]
-        for dr, dc, move in self.directions:
-            # next potential position by adding the grid row and grid col
-            ## eg. current = 4, 2; go up one grid = 3, 2
-            nr, nc = r + dr, c + dc
+        # iterate over 4 directions { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
+        for move, coordinates in self.directions.items():
+            dx, dy = coordinates
+            # next potential position by adding the updating (x, y) position
+            ## eg. current = (4, 2) ; go up one grid = (4, 1)
+            nx, ny = x + dx, y + dy
 
             # check if the next position is in bound
-            if 0 <= nr < rows and 0 <= nc < cols:
+            if 0 <= nx < self.nxs and 0 <= ny < self.nys:
 
                 # if macro is True, only consider box pushing actions
                 if self.macro:
@@ -212,64 +230,55 @@ class SokobanPuzzle(search.Problem):
 
                 else:
                     # if the next position is a box (efficient lookup from hashset)
-                    if (nr, nc) in boxes:
+                    if (nx, ny) in boxes:
                         # want to push box, so need to identify the 'next next position'
-                        nnr, nnc = nr + dr, nc + dc
+                        nnx, nny = nx + dx, ny + dy
 
                         # if the 'next next position' is in game boundary
-                        if 0 <= nnr < rows and 0 <= nnc < cols:
+                        if 0 <= nnx < self.nxs and 0 <= nny < self.nys:
                             # if the 'next next position' is a vacant space or target cell
-                            if (nnr, nnc) not in boxes and self.matrix[nnr][nnc] in [' ', '.']:
+                            if (nnx, nny) not in boxes and (nnx, nny) not in self.walls:
                                 # check if that vacant cell might be a taboo from taboo_layout
                                 ## if 'taboo_push' is False, cannot push to taboo cell
-                                if not self.allow_taboo_push and taboo_layout[nnr][nnc] == 'X':
-                                    continue # skip and continue directly from next iteration
+                                if not self.allow_taboo_push and self.taboo_layout[nny][nnx] == 'X':
+                                    continue  # skip and continue directly from next iteration
 
                                 possible_actions.append(move)
 
                     # if the next position is a vacant space or the target spot -> move worker
-                    elif self.matrix[nr][nc] not in '#*': 
+                    elif (nx, ny) not in self.walls:
                         possible_actions.append(move)
-
         return possible_actions
 
-    def result(self, state, action): # now the worker is ABOUT TO perform an action
+    def result(self, state, action): # now worker is ABOUT to perform an action
         # get current worker position from the state
-        ## worker = (r, c); boxes (hashset) = {(r, c), (r, c) ...} -> They are the LATEST state not initial
         worker, boxes = state
-        r, c = worker
+        x, y = worker
 
-        # iterate over 4 directions [(-1, 0, 'Up'), (1, 0, 'Down'), (0, -1, 'Left'), (0, 1, 'Right')]
-        for dr, dc, move in self.directions:
-            # if the iterated move == action that the worker is going to perform
-            if move == action:
-                # next position for the worker (r, c) -> (nr, nc)
-                ## eg. current = 4, 2; go up one grid = 3, 2
-                nr, nc = r + dr, c + dc 
+        # directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
+        dx, dy = self.directions[action]
 
-                # if the new location is a box, worker will push the box
-                ## use hashset for efficient look up
-                if (nr, nc) in boxes:
-                    # find the 'next next position'
-                    nnr, nnc = nr + dr, nc + dc
+        # next position for the worker (x, y) -> (nx, ny)
+        nx, ny = x + dx, y + dy 
 
-                    # push the box to the new position
-                    ## remove old box position
-                    ## add new box position
-                    new_boxes = set(boxes)
-                    new_boxes.remove((nr, nc))
-                    new_boxes.add((nnr, nnc))
+        # if the new location is a box, worker will push the box
+        if (nx, ny) in boxes:
+            # find the 'next next position'
+            nnx, nny = nx + dx, ny + dy
 
-                    # record and return new state
-                    ## worker new position is updated as (nr, nc)
-                    return ((nr, nc), frozenset(new_boxes))
+            # push the box to the new position
+            new_boxes = set(boxes)
+            new_boxes.remove((nx, ny))
+            new_boxes.add((nnx, nny))
 
-                # if worker is moving to a vacant space
-                else:
-                    # record and return new state
-                    ## worker new position is updated as (nr, nc)
-                    return ((nr, nc), boxes)
-                
+            # return new state with updated worker and boxes positions
+            return ((nx, ny), frozenset(new_boxes))
+
+        # if worker is moving to a vacant space
+        else:
+            # return new state with updated worker position
+            return ((nx, ny), boxes)
+    
         # if action is not legal, should not happen
         raise Exception('Invalid action')
 
@@ -277,7 +286,7 @@ class SokobanPuzzle(search.Problem):
         # get current boxes position
         _, boxes = state
 
-        # check if all boxes are in targets position
+        # check if all boxes are in target positions
         return all(box in self.targets for box in boxes)
 
     def path_cost(self, c, state1, action, state2):
@@ -288,7 +297,6 @@ class SokobanPuzzle(search.Problem):
 
 def check_action_seq(warehouse, action_seq):
     '''
-    
     Determine if the sequence of actions listed in 'action_seq' is legal or not.
     
     Important notes:
@@ -309,86 +317,74 @@ def check_action_seq(warehouse, action_seq):
                the sequence of actions.  This must be the same string as the
                string returned by the method  Warehouse.__str__()
     '''
-    
     ##         "INSERT YOUR CODE HERE"
-    warehouse_layout = str(warehouse).splitlines()
-    rows, cols = len(warehouse_layout), len(warehouse_layout[0])
-    matrix = [[''] * cols for _ in range(rows)]
 
-    # Create 2D matrix for warehouse
-    for r in range(rows):
-        for c in range(cols):
-            matrix[r][c] = warehouse_layout[r][c]
+    # retrieve states from the warehouse
+    walls = set(warehouse.walls)
+    targets = set(warehouse.targets)
+    boxes = set(warehouse.boxes)
+    worker = warehouse.worker 
 
-    # define the initial positions of variables 
-    walls, boxes, targets = [], [], []
-    worker = ()
-    for r in range(rows):
-        for c in range(cols):
-            # initial position
-            if matrix[r][c] == '#':
-                walls.append((r,c))
-            elif matrix[r][c] == '$':
-                boxes.append((r,c))
-            elif matrix[r][c] == '.':
-                targets.append((r,c))
-            elif matrix[r][c] == '*': # box on a target
-                targets.append((r,c))  
-                boxes.append((r,c))  
-            elif matrix[r][c] == '@':
-                worker = (r,c)
-
-    # define the directions
-    move_dic = {
-        'Left': (0, -1),
-        'Right': (0, 1),
-        'Up': (-1, 0),
-        'Down': (1, 0)
-    }
-
-    # Check the action in seq is valid or not
-    for action in action_seq:
-        if action not in move_dic:
-            return "Failure"
+    # directions to move in (x, y) -> NOTE: origin at TOP-LEFT
+    directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
     
-        # worker next move
-        worker_row, worker_col = worker
-        dic_x, dic_y = move_dic[action]
-        next_move = (worker_row + dic_x, worker_col + dic_y)
+    for action in action_seq:
+        if action not in directions:
+            return 'Failure'
 
-        # check if next move is the wall
-        if next_move in walls:
-            return "Failure"
-        
-        # check if next move is the box
-        if next_move in boxes:
-            box_next_position = (next_move[0] + dic_x, next_move[1] + dic_y)
-            # check the box’s next position is a wall or a box 
-            if box_next_position in walls or box_next_position in boxes:
-                return "Failure"
-            # push the box
+        # get worker position
+        x, y = worker
+
+        # next potential position
+        dx, dy = directions[action]
+        nx, ny = x + dx, y + dy
+
+        # if next position is not reachable (a wall or a box already on a target)
+        if (nx, ny) in walls:
+            return 'Failure'
+
+        # if next position is a box
+        if (nx, ny) in boxes:
+            # need to push box to next next position
+            nnx, nny = nx + dx, ny + dy
+
+            # check if next next position is reachable (can't push into walls or other boxes)
+            if (nnx, nny) in walls or (nnx, nny) in boxes:
+                return 'Failure'
+
+            # move the box to the next next position
+            boxes.remove((nx, ny))
+            boxes.add((nnx, nny))
+
+        # update worker position to the next position
+        worker = (nx, ny)
+    
+    # compute number of rows and columns from the layout
+    all_positions = walls | boxes | targets | {worker}
+    nys = max(y for _, y in all_positions) + 1
+    nxs = max(x for x, _ in all_positions) + 1
+
+    # construct new warehouse layout
+    new_warehouse = []
+    for y in range(nys):
+        line = []
+        for x in range(nxs):
+            pos = (x, y)  # x and y coordinates with origin at TOP-LEFT
+            if pos in walls:
+                line.append('#')
+            elif pos in boxes and pos in targets:
+                line.append('*')  # box on target
+            elif pos in boxes:
+                line.append('$')  # box
+            elif pos in targets:
+                line.append('.')  # target
+            elif pos == worker:
+                line.append('@' if pos not in targets else '!')  # worker or worker on target
             else:
-                boxes.remove(next_move)
-                boxes.append(box_next_position)
-        # update worker's position
-        worker = next_move
-
-    # update worker's position in the matrix
-    # clear all the related signs
-    for r in range(rows):
-        for c in range(cols):
-            if matrix[r][c] == '$' or matrix[r][c] == '@' or matrix[r][c] == '*':
-                matrix[r][c] = ' '
-    # update worker's position
-    matrix[worker[0]][worker[1]] = '@'
-    # update boxes' and targets' positions
-    for box in boxes:
-        if box in targets:
-            matrix[box[0]][box[1]] = '*'
-        else:
-            matrix[box[0]][box[1]] = '$'
-
-    return '\n'.join([''.join(row) for row in matrix])
+                line.append(' ')  # free space
+        new_warehouse.append(''.join(line))
+    
+    return '\n'.join(new_warehouse)
 
 def solve_sokoban_elem(warehouse):
     '''    
@@ -413,34 +409,8 @@ def solve_sokoban_elem(warehouse):
     solution_node = search.breadth_first_graph_search(sokoban)
     if solution_node is None:
         return 'Impossible'
-
+    
     return solution_node.solution()
-
-def dfs(matrix, source, target, visited=None):
-    '''
-    A function that search a matrix of movements, return true if the target is accessible from the origin
-    '''
-    x, y = source
-
-    if visited is None:
-        visited = set()
-    if source == target:
-        return True
-    visited.add(source)
-    
-    rows = len(matrix)
-    cols = len(matrix[0])
-    
-    directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-
-    for direction in directions:
-        nx, ny = x + direction[0], y + direction[1]
-        if 0<=nx <rows and 0 <= ny < cols:
-            neighbor = (nx, ny)
-            if matrix[nx][ny] == 0 and neighbor not in visited:  
-                if dfs(matrix, neighbor, target, visited): 
-                    return True
-    return False
 
 def can_go_there(warehouse, dst):
     '''    
@@ -455,26 +425,11 @@ def can_go_there(warehouse, dst):
     '''
     
     ##         "INSERT YOUR CODE HERE"
-    y, x = warehouse.worker
-    x1, y1 = dst
-    target = tuple((x+x1, y+y1))
-    x_max = max([x for x, y in warehouse.walls])
-    x_min = min([x for x, y in warehouse.walls])
-
-    y_max = max([y for x, y in warehouse.walls])
-    y_min = min([y for x, y in warehouse.walls])
-
-    dist = tuple((x_max-x_min, y_max-y_min))
-     
-    matrix = [[0 for _ in range(dist[0] + 1)] for _ in range(dist[1] + 1)]
-
-    for wall_x, wall_y in warehouse.walls:
-        matrix[wall_y - y_min][wall_x - x_min]  = 1 
-
-    for box_x, box_y in warehouse.boxes:
-        matrix[box_y - y_min][box_x - x_min] = 1 
-    
-    return dfs(matrix, tuple((x,y)), target)
+    goal = (dst[1], dst[0])
+    goThereSolver = SokobanPuzzle(warehouse, goal=goal, can_push=False)
+            
+    sol_ts = search.breadth_first_graph_search(goThereSolver)
+    return sol_ts is not None
 
 def solve_sokoban_macro(warehouse):
     '''    
