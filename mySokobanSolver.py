@@ -45,6 +45,11 @@ def taboo_cells(warehouse):
        The returned string should NOT have marks for the worker, the targets,
        and the boxes.  
     '''
+    # retrieving warehouse
+    warehouse = str(warehouse).split('\n')
+    warehouse = [list(row) for row in warehouse]
+    rows, cols = len(warehouse), len(warehouse[0])
+    
     for r in range(rows):
         # from left
         l_ptr = 0
@@ -121,7 +126,7 @@ def taboo_cells(warehouse):
                         for i in range(top_corner + 1, r):
                             warehouse[i][c] = 'X'
                     top_corner = r
-
+    
     # remove other symbols and swap 'NA' back to empty spaces
     for r in range(rows):
         for c in range(cols):
@@ -129,7 +134,8 @@ def taboo_cells(warehouse):
                 warehouse[r][c] = ' '
             if warehouse[r][c] == 'NA':
                 warehouse[r][c] = ' '
-
+                
+   
     return '\n'.join([''.join(row) for row in warehouse])
 
     ##         "INSERT YOUR CODE HERE"    
@@ -166,7 +172,7 @@ class SokobanPuzzle(search.Problem):
     
     '''
     
-    def __init__(self, warehouse, goal=None, can_push=True, use_macro=False, use_taboo_cells=False):
+    def __init__(self, warehouse, goal=None, can_push=True, use_macro=False):
         
         self.warehouse = warehouse
         self.can_push = can_push
@@ -180,9 +186,6 @@ class SokobanPuzzle(search.Problem):
         self.boxes = warehouse.boxes
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
-
-        self.outside = set()
-        self.useTaboo = use_taboo_cells
         self.taboo_cells = set()
 
         self.action_dict = {
@@ -196,44 +199,14 @@ class SokobanPuzzle(search.Problem):
         self.initial =  tuple((self.worker, tuple(self.boxes)))# use tuple to make the state hashable
         self.targets = tuple(self.targets) # use tuple to make the state hashable
 
-    def find_outside(self):
-        warehouse = str(self.warehouse).split('\n')
-        warehouse = [list(row) for row in warehouse]
-        rows, cols = len(warehouse), len(warehouse[0])
-    
-        # mark out of boundary position as NA
-        ## left and right detection
-        for r in range(rows):
-            # from left
-            l_ptr = 0
-            while l_ptr < cols and warehouse[r][l_ptr] != '#':
-                if warehouse[r][l_ptr] == ' ':
-                    self.outside.add((l_ptr, r))
-                l_ptr += 1
-    
-            # from right
-            r_ptr = cols - 1
-            while r_ptr >= 0 and warehouse[r][r_ptr] != '#':
-                if warehouse[r][r_ptr] == ' ':
-                    self.outside.add((r_ptr, r))
-                r_ptr -= 1
-    
-        ## top and bottom detection
-        for c in range(cols):
-            # from top
-            t_ptr = 0
-            while t_ptr < rows and warehouse[t_ptr][c] != '#':
-                if warehouse[t_ptr][c] == ' ':
-                    self.outside.add((c, t_ptr))
-                t_ptr += 1
-    
-            # from bottom
-            b_ptr = rows - 1
-            while b_ptr >= 0 and warehouse[b_ptr][c] != '#':
-                if warehouse[b_ptr][c] == ' ':
-                     self.outside.add((c, b_ptr))
-                b_ptr -= 1
-    
+    def find_taboo(self, taboo_warehouse):
+        if (len(self.taboo_cells) == 0):
+            lines = taboo_warehouse.split("\n")
+            self.taboo_cells =set(sokoban.find_2D_iterator(lines, "X"))
+            
+    def h(self, state):
+        return self.manhattan_distance(state)
+        
     def move_result(self, direction, state):
         """
         executes a move action
@@ -257,73 +230,7 @@ class SokobanPuzzle(search.Problem):
         boxes.append(new_box_position)
         
         return tuple((new_worker_position, boxes))
-        
-    def is_corner(self, cell):
-        """
-        Used to find a valid starting cell for the taboo cell search,
-        @params: a tuple (x, y) 
-        """
-        x, y = cell
-        if (((x-1, y) in self.walls and (x, y-1) in self.walls) or \
-        ((x-1, y) in self.walls and (x, y+1) in self.walls) or \
-        ((x+1, y) in self.walls and (x, y+1) in self.walls) or \
-        ((x+1, y) in self.walls and (x, y-1) in self.walls)) and \
-        cell not in self.walls:
-            return True
-        return False
- 
-    def find_taboo(self):
-         # retrieving warehouse
-        warehouse = str(self.warehouse).split('\n')
-        warehouse = [list(row) for row in warehouse]
-        rows, cols = len(warehouse), len(warehouse[0])
-        # rule 1: mark taboo cell at corners
-        for r in range(rows):
-            for c in range(cols): 
-                current_tile = (c, r)
-                if warehouse[r][c] not in ('.', '#') and current_tile not in self.outside:
-                    # top-left
-                    if r > 0 and c > 0 and warehouse[r - 1][c] == '#' and warehouse[r][c - 1] == '#':
-                        self.taboo_cells.add((c,r))
-                    # top-right
-                    if r > 0 and c + 1 < cols and warehouse[r - 1][c] == '#' and warehouse[r][c + 1] == '#':
-                        self.taboo_cells.add((c,r))
-                    # bottom-left
-                    if r + 1 < rows and c > 0 and warehouse[r + 1][c] == '#' and warehouse[r][c - 1] == '#':
-                        self.taboo_cells.add((c,r))
-                    # bottom-right
-                    if r + 1 < rows and c + 1 < cols and warehouse[r + 1][c] == '#' and warehouse[r][c + 1] == '#':
-                        self.taboo_cells.add((c,r))
-    
-        # Rule 2: mark taboo cells between two corners along walls
-        ## horizontal detection (left to right)
-        for r in range(rows):
-            left_corner = -1
-            for c in range(cols):
-                if (c,r) in self.taboo_cells:  # Found a corner
-                    if left_corner == -1:
-                        left_corner = c
-                    else:
-                        # check if all cells between the corners are empty spaces and not targets
-                        if all(warehouse[r][i] == ' ' for i in range(left_corner + 1, c)) and all(warehouse[r][i] not in '.' for i in range(left_corner + 1, c)):
-                            for i in range(left_corner + 1, c):
-                                self.taboo_cells.add((i,r))
-                        left_corner = c
-    
-        # vertical detection (top to bottom)
-        for c in range(cols):
-            top_corner = -1
-            for r in range(rows):
-                if (c,r) in self.taboo_cells:  # Found a corner
-                    if top_corner == -1:
-                        top_corner = r
-                    else:
-                        # check if all cells between the corners are empty spaces and not targets
-                        if all(warehouse[i][c] == ' ' for i in range(top_corner + 1, r)) and all(warehouse[i][c] not in '.' for i in range(top_corner + 1, r)):
-                            for i in range(top_corner + 1, r):
-                                self.taboo_cells.add((c,i))
-                        top_corner = r
-                            
+                                
     
     def actions(self, state):
         """
@@ -336,8 +243,6 @@ class SokobanPuzzle(search.Problem):
         worker, boxes = state
         actions = []
 
-        if len(taboo_cells) == 0:
-            taboo_cells =set(find_2D_iterator(taboo_cells(current_warehouse).split("\n", "X")))
         #(row, column)
         # Directions: (-1, 0) = left, (1, 0) = right, (0, -1) = down, (0, 1) = up
         directions = [(-1,0), (1,0), (0,-1), (0,1)]
@@ -346,7 +251,6 @@ class SokobanPuzzle(search.Problem):
             # If the new worker position is in a wall, skip to the next direction
             if new_worker_pos in self.walls:
                 continue
-            
             # If the new worker position is in a box
             if new_worker_pos in boxes:
                 # Check if pushing the box is allowed
@@ -356,8 +260,8 @@ class SokobanPuzzle(search.Problem):
                 # Determine the new box position after pushing
                 new_box_pos = tuple(a + b for a, b in zip(new_worker_pos, direction))
                 
-                # If the new box position is in a wall or another box, skip this direction
-                if new_box_pos in self.walls or new_box_pos in boxes:
+                # If the new box position is in a wall or another box, or a taboo cell, skip this direction
+                if new_box_pos in self.walls or new_box_pos in boxes or new_box_pos in taboo_cells:
                     continue
                 
                 # The move is legal, append it as a push action
@@ -380,7 +284,38 @@ class SokobanPuzzle(search.Problem):
             return worker == self.goal
         else:
             return set(boxes) == set(self.targets)
+            
+    def path_cost(self, c, state1, action, state2):
+        return c+1
 
+    def manhattan_distance(self, state):
+        
+        worker, boxes = state.state
+        player_x, player_y = worker
+        
+        boxes_cost = 0
+        player_cost = 0
+        
+        for box_x, box_y in boxes:
+        # Cost of moving each box to the nearest goal
+            min_box_goal_distance = min(
+                abs(box_x - goal_x) + abs(box_y - goal_y) for goal_x, goal_y in self.targets
+            )
+            boxes_cost += min_box_goal_distance
+        
+        if boxes:
+        #same, should be changes to box not on a target
+            player_cost = min(
+                abs(box_x - player_x) + abs(box_y - player_y) for box_x, box_y in boxes
+            )
+        
+        return boxes_cost + player_cost
+    
+    def value(self, state):
+        """For optimization problems, each state has a value.  Hill-climbing
+        and related algorithms try to maximize this value."""
+        raise NotImplementedError
+        
     def print_solution(self, goal_node):
 
         path = goal_node.path()
@@ -392,7 +327,7 @@ class SokobanPuzzle(search.Problem):
             if node.action:
                 moves.append(node.action)
         return(moves)
-        ######################## Macro#############
+      
         
 
 def check_action_seq(warehouse, action_seq):
@@ -450,7 +385,17 @@ def solve_sokoban_elem(warehouse):
     return sol_ts
 
 
+class canGoPuzzle(SokobanPuzzle):
+   
+    def euclidean_distance(self, node):
+        worker = node.state[0]
+        player_x, player_y = worker
+        return np.sqrt((player_x - self.goal[0])**2+ (player_y - self.goal[1])**2)
 
+    def h(self,state):
+        return self.manhattan_distance(state)
+        
+    
 def can_go_there(warehouse, dst):
     '''    
     Determine whether the worker can walk to the cell dst=(row,column) 
@@ -469,13 +414,50 @@ def can_go_there(warehouse, dst):
     ##         "INSERT YOUR CODE HERE"
     goal = (dst[1], dst[0])
     
-    goThereSolver = SokobanPuzzle(warehouse, goal=goal, can_push=False)
+    goThereSolver = canGoPuzzle(warehouse, goal=goal, can_push=False)
             
     sol_ts = search.breadth_first_graph_search(goThereSolver)
+    
     return sol_ts is not None
 
 
+class solveSokoMacro(SokobanPuzzle):
 
+     
+        def result(self, state, action):
+            worker, boxes = state
+            box, direction = action
+            box = (box[1], box[0])
+            
+        
+            new_box = tuple(a+b for a , b in zip(self.action_dict[direction], box))
+            boxes_list = list(boxes)
+            boxes_list.remove(box)
+            boxes_list.append(new_box)
+            new_worker = box
+            return tuple((new_worker, tuple(boxes_list)))
+        
+        def actions(self, state):
+            worker, boxes =state
+            actions = []
+            
+            for box in boxes:
+                #check all tiles adjacent to the box
+                for key, direction in self.action_dict.items():
+                    #position of the worker next to the box
+                    worker_pos = tuple(a-b for a,b in zip(box, direction))
+                    #create a new warehouse with the current position of the worker before any move
+                    new_warehouse = self.warehouse.copy(worker=worker, boxes=boxes)
+                    #check if the worker can go there, targer is y, x so needs to be inverted
+                    if can_go_there(new_warehouse, tuple((worker_pos[1], worker_pos[0]))):
+                        
+                        new_box_pos = tuple(a+b for a,b in zip(box, direction))
+        
+                        if new_box_pos not in self.walls and new_box_pos not in boxes and new_box_pos not in self.taboo_cells:
+                            #again, the output needs to be y, x
+                            actions.append(tuple(((box[1], box[0]), key)))
+            return actions
+            
 def solve_sokoban_macro(warehouse):
     '''    
     Solve using macro actions the puzzle defined in the warehouse passed as
@@ -498,47 +480,13 @@ def solve_sokoban_macro(warehouse):
     
     ##         "INSERT YOUR CODE HERE"
     #find reachable box       
-    class solveSokoMacro(SokobanPuzzle):
-        
-        def result(self, state, action):
-            worker, boxes = state
-            box, direction = action
-            box = (box[1], box[0])
-            
-        
-            new_box = tuple(a+b for a , b in zip(self.action_dict[direction], box))
-            boxes_list = list(boxes)
-            boxes_list.remove(box)
-            boxes_list.append(new_box)
-            new_worker = box
-            return tuple((new_worker, tuple(boxes_list)))
-        
-            
-            
-            
-        def actions(self, state):
-            worker, boxes =state
-            actions = []
-            
-            for box in boxes:
-                #check all tiles adjacent to the box
-                for key, direction in self.action_dict.items():
-                    #position of the worker next to the box
-                    worker_pos = tuple(a-b for a,b in zip(box, direction))
-                    #create a new warehouse with the current position of the worker before any move
-                    new_warehouse = self.warehouse.copy(worker=worker, boxes=boxes)
-                    #check if the worker can go there, targer is y, x so needs to be inverted
-                    if can_go_there(new_warehouse, tuple((worker_pos[1], worker_pos[0]))):
-                        
-                        new_box_pos = tuple(a+b for a,b in zip(box, direction))
-        
-                        if new_box_pos not in self.walls and new_box_pos not in boxes:
-                            #again, the output needs to be y, x
-                            actions.append(tuple(((box[1], box[0]), key)))
-            return actions
-              
+    
+    taboo_warehouse = taboo_cells(warehouse)
     macroSolver = solveSokoMacro(warehouse)
-    sol_ts = search.breadth_first_graph_search(macroSolver)
+    #add the taboo cells
+    macroSolver.find_taboo(taboo_warehouse)
+    
+    sol_ts = search.astar_graph_search(macroSolver,macroSolver.h)
     if sol_ts is not None:
         return macroSolver.print_solution(sol_ts)
     else:
