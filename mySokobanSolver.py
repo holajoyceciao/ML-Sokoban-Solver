@@ -385,6 +385,7 @@ def solve_sokoban_elem(warehouse):
     return sol_ts
 
 
+import numpy as np
 class canGoPuzzle(SokobanPuzzle):
    
     def euclidean_distance(self, node):
@@ -393,7 +394,7 @@ class canGoPuzzle(SokobanPuzzle):
         return np.sqrt((player_x - self.goal[0])**2+ (player_y - self.goal[1])**2)
 
     def h(self,state):
-        return self.manhattan_distance(state)
+        return self.euclidean_distance(state)
         
     
 def can_go_there(warehouse, dst):
@@ -416,7 +417,7 @@ def can_go_there(warehouse, dst):
     
     goThereSolver = canGoPuzzle(warehouse, goal=goal, can_push=False)
             
-    sol_ts = search.breadth_first_graph_search(goThereSolver)
+    sol_ts = search.astar_graph_search(goThereSolver, goThereSolver.h)
     
     return sol_ts is not None
 
@@ -457,7 +458,17 @@ class solveSokoMacro(SokobanPuzzle):
                             #again, the output needs to be y, x
                             actions.append(tuple(((box[1], box[0]), key)))
             return actions
-            
+
+import signal
+
+# Define a timeout exception
+class TimeoutException(Exception):
+    pass
+
+# Define the signal handler
+def timeout_handler(signum, frame):
+    raise TimeoutException("Computation took too long!")
+
 def solve_sokoban_macro(warehouse):
     '''    
     Solve using macro actions the puzzle defined in the warehouse passed as
@@ -481,16 +492,34 @@ def solve_sokoban_macro(warehouse):
     ##         "INSERT YOUR CODE HERE"
     #find reachable box       
     
-    taboo_warehouse = taboo_cells(warehouse)
-    macroSolver = solveSokoMacro(warehouse)
-    #add the taboo cells
-    macroSolver.find_taboo(taboo_warehouse)
+    # Set the timeout handler for a 3-minute limit (180 seconds)
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(180)  # Set the alarm for 3 minutes
+    try:
+        # Find reachable boxes and solve using macro actions
+        
+        taboo_warehouse = taboo_cells(warehouse)
+        print(taboo_warehouse)
+        macroSolver = solveSokoMacro(warehouse)
+        
+        # Add taboo cells
+        macroSolver.find_taboo(taboo_warehouse)
+
+        
+        # Perform A* search
+        sol_ts = search.astar_graph_search(macroSolver, macroSolver.h)
+        
+        # Check if a solution was found
+        if sol_ts is not None:
+            return macroSolver.print_solution(sol_ts)
+        else:
+            return "Impossible"
+
+    except TimeoutException:
+        return "Timeout"
     
-    sol_ts = search.astar_graph_search(macroSolver,macroSolver.h)
-    if sol_ts is not None:
-        return macroSolver.print_solution(sol_ts)
-    else:
-        return "Impossible"
-    
+    finally:
+        # Cancel the alarm after completion or timeout
+        signal.alarm(0)
     
 
