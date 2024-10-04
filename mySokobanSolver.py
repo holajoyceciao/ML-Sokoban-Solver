@@ -9,9 +9,10 @@ That is, changing the formal parameters of a function will break the
 interface and triggers to a fail for the test of your code.
 '''
 
-
 import search
 import sokoban
+import numpy as np
+import time
 
 def my_team():
     '''
@@ -84,6 +85,7 @@ def taboo_cells(warehouse):
                 warehouse[b_ptr][c] = 'NA'
             b_ptr -= 1
 
+    # check taboo cells
     # rule 1: mark taboo cell at corners
     for r in range(rows):
         for c in range(cols):
@@ -101,7 +103,7 @@ def taboo_cells(warehouse):
                 if r + 1 < rows and c + 1 < cols and warehouse[r + 1][c] == '#' and warehouse[r][c + 1] == '#':
                     warehouse[r][c] = 'X'
 
-    # Rule 2: mark taboo cells between two corners along walls
+    # rule 2: mark taboo cells between two corners along walls
     ## horizontal detection (left to right)
     for r in range(rows):
         left_corner = -1
@@ -168,86 +170,97 @@ class SokobanPuzzle(search.Problem):
     return elementary actions.
     '''
     
-    def __init__(self, warehouse, allow_taboo_push=False, macro=False):
+    def __init__(self, warehouse, goal=None, allow_taboo_push=False, macro=False):
         # directions to move in (x, y) -> NOTE: origin at TOP-LEFT
         self.directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
 
         # retrieve key state of the warehouse
-        self.walls = set()
-        self.targets = set()
-        self.boxes = set()
-        self.worker = tuple()
-        self.define_game_state(warehouse)
-        
-        # get maximum game boundaries
-        ## compute number of rows and columns from the layout by joining sets and get maximum
-        all_positions = self.walls | self.boxes | self.targets | {self.worker}
-        self.nys = max(y for _, y in all_positions) + 1
-        self.nxs = max(x for x, _ in all_positions) + 1
-
-        # get taboo cell from the function to know if a position is 'X'
-        self.taboo_layout = taboo_cells(warehouse).splitlines()
-
-        # save the state for type of movement
-        self.allow_taboo_push = allow_taboo_push
-        self.macro = macro
-
-        # save the original state for the warehouse
-        super().__init__((self.worker, frozenset(self.boxes)))
-
-    def define_game_state(self, warehouse):
-        # retrieve states from the warehouse
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
         self.boxes = set(warehouse.boxes)
         self.worker = warehouse.worker
+        self.goal = goal
+        
+        # get maximum game boundaries
+        ## compute number of rows and columns from the layout by joining sets and get maximum
+        all_positions = self.walls | self.boxes | self.targets | {self.worker} # output: {(2,4), (5,3), (1,0), ...}
+        self.nys = max(y for _, y in all_positions) + 1 # output: {(_,4), (_,3),(_,0)} --> 4
+        self.nxs = max(x for x, _ in all_positions) + 1 # output: {(2,_), (5,_),(1,_)} --> 5
+
+        # get taboo cell from the function to know if a position is 'X'
+        self.taboo_layout = taboo_cells(warehouse).splitlines()
+        #need taboo cell for the lookup in solve_macro
+        self.taboo_cells = set(sokoban.find_2D_iterator(self.taboo_layout , "X"))
+
+        # save the state for type of movement
+        self.allow_taboo_push = allow_taboo_push
+        #need the warehouse for the can_go_there, at the moment
+        self.warehouse = warehouse
+        self.macro = macro
+
+        # save the original state for the warehouse
+        super().__init__((self.worker, frozenset(self.boxes)))
 
     def actions(self, state):
         """
         Return the list of actions that can be executed in the given state.
         """
         # get CURRENT worker position from the state
-        ## worker = (x, y); boxes (hashset) = {(x, y), (x, y) ...} -> They are the LATEST state not initial
+        # worker = (x, y); boxes (hashset) = {(x, y), (x, y) ...} -> They are the LATEST state not initial
         worker, boxes = state
         x, y = worker
 
         # legal action for the worker
         possible_actions = []
-
         # iterate over 4 directions { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
         for move, coordinates in self.directions.items():
             dx, dy = coordinates
             # next potential position by adding the updating (x, y) position
-            ## eg. current = (4, 2) ; go up one grid = (4, 1)
+            # eg. current = (4, 2) ; go UP (0,-1) --> new= (4, 1)
             nx, ny = x + dx, y + dy
 
             # check if the next position is in bound
             if 0 <= nx < self.nxs and 0 <= ny < self.nys:
-
                 # if macro is True, only consider box pushing actions
                 if self.macro:
-                    pass # NOT implemented (Joyce)
-
+                    for box in boxes:
+                        # position of the worker next to the box
+                        worker_pos = (box[0] - coordinates[0], box[1] - coordinates[1])
+                        # check it the move is valid, saves time
+                        new_box_pos = (box[0] + coordinates[0], box[1] + coordinates[1])
+                        # cannot push a box on a wall or an other box
+                        if new_box_pos in self.walls.union(boxes):
+                            continue
+                        # if allow_taboo push is false
+                        if new_box_pos in self.taboo_cells and not self.allow_taboo_push:
+                            continue
+                        
+                        tem_warehouse = self.warehouse.copy(worker=worker, boxes=boxes)
+                        # check if the worker can go there, targer is y, x so needs to be inverted
+                        if can_go_there(tem_warehouse, (worker_pos[1], worker_pos[0])):
+                                possible_actions.append(((box[1], box[0]), move))
+            
                 else:
                     # if the next position is a box (efficient lookup from hashset)
                     if (nx, ny) in boxes:
-                        # want to push box, so need to identify the 'next next position'
+                        # want to push box, so need to identify the 'box's next position'
                         nnx, nny = nx + dx, ny + dy
 
-                        # if the 'next next position' is in game boundary
+                        # if the 'box's next position' is in game boundary
                         if 0 <= nnx < self.nxs and 0 <= nny < self.nys:
-                            # if the 'next next position' is a vacant space or target cell
+                            # if the 'box's next position' is a vacant space or target cell
                             if (nnx, nny) not in boxes and (nnx, nny) not in self.walls:
                                 # check if that vacant cell might be a taboo from taboo_layout
-                                ## if 'taboo_push' is False, cannot push to taboo cell
-                                if not self.allow_taboo_push and self.taboo_layout[nny][nnx] == 'X':
+                                # if 'taboo_push' is False, cannot push to taboo cell
+                                if not self.allow_taboo_push and self.taboo_layout[nny][nnx] == 'X': 
                                     continue  # skip and continue directly from next iteration
 
-                                possible_actions.append(move)
+                                possible_actions.append(move) # add valid move to the possible action list
 
                     # if the next position is a vacant space or the target spot -> move worker
                     elif (nx, ny) not in self.walls:
-                        possible_actions.append(move)
+                        possible_actions.append(move) # add valid move to the possible action list
+
         return possible_actions
 
     def result(self, state, action): # now worker is ABOUT to perform an action
@@ -255,43 +268,66 @@ class SokobanPuzzle(search.Problem):
         worker, boxes = state
         x, y = worker
 
-        # directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
-        dx, dy = self.directions[action]
-
-        # next position for the worker (x, y) -> (nx, ny)
-        nx, ny = x + dx, y + dy 
-
-        # if the new location is a box, worker will push the box
-        if (nx, ny) in boxes:
-            # find the 'next next position'
-            nnx, nny = nx + dx, ny + dy
-
-            # push the box to the new position
+        if self.macro:
+            box, direction = action
+            box = (box[1], box[0])  # Convert to (x, y) format
+            dx, dy = self.directions[direction]
+            new_box = (box[0] + dx, box[1] + dy)
             new_boxes = set(boxes)
-            new_boxes.remove((nx, ny))
-            new_boxes.add((nnx, nny))
-
-            # return new state with updated worker and boxes positions
-            return ((nx, ny), frozenset(new_boxes))
-
-        # if worker is moving to a vacant space
+            new_boxes.remove(box)
+            new_boxes.add(new_box)
+            new_worker = box
+            return (new_worker, frozenset(new_boxes))
+        
         else:
-            # return new state with updated worker position
-            return ((nx, ny), boxes)
-    
-        # if action is not legal, should not happen
-        raise Exception('Invalid action')
+            # directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
+            dx, dy = self.directions[action]
+
+            # next position for the worker (x, y) -> (nx, ny)
+            nx, ny = x + dx, y + dy 
+
+            # if the new location is a box, worker will push the box
+            if (nx, ny) in boxes:
+                # find the 'box's next position'
+                nnx, nny = nx + dx, ny + dy
+
+                # push the box to the new position
+                new_boxes = set(boxes)
+                new_boxes.remove((nx, ny))
+                new_boxes.add((nnx, nny))
+
+                # return new state with updated worker and boxes positions
+                return ((nx, ny), frozenset(new_boxes))
+
+            # if worker is moving to a vacant space
+            else:
+                # return new state with updated worker position
+                return ((nx, ny), boxes)
 
     def goal_test(self, state):
         # get current boxes position
         _, boxes = state
-
+        
         # check if all boxes are in target positions
         return all(box in self.targets for box in boxes)
 
     def path_cost(self, c, state1, action, state2):
         # record length of path
         return c + 1
+    
+    def h(self, node):
+        """
+        Heuristic function for A* search.
+        Estimates the cost from the current state to the goal state.
+        """
+        _, boxes = node.state
+        return sum(min(abs(bx-tx) + abs(by-ty) for tx, ty in self.targets) for bx, by in boxes)
+    
+    # def h_1(self, state):
+    #     return self.manhattan_distance(state)
+    
+    # def h_2(self, state):
+    #     return self.euclidean_distance(state)
 
 
 
@@ -345,14 +381,14 @@ def check_action_seq(warehouse, action_seq):
 
         # if next position is a box
         if (nx, ny) in boxes:
-            # need to push box to next next position
+            # need to push box to box'x next position
             nnx, nny = nx + dx, ny + dy
 
-            # check if next next position is reachable (can't push into walls or other boxes)
+            # check if box's next position is reachable (can't push into walls or other boxes)
             if (nnx, nny) in walls or (nnx, nny) in boxes:
                 return 'Failure'
 
-            # move the box to the next next position
+            # move the box to the box's next position
             boxes.remove((nx, ny))
             boxes.add((nnx, nny))
 
@@ -360,9 +396,9 @@ def check_action_seq(warehouse, action_seq):
         worker = (nx, ny)
     
     # compute number of rows and columns from the layout
-    all_positions = walls | boxes | targets | {worker}
-    nys = max(y for _, y in all_positions) + 1
-    nxs = max(x for x, _ in all_positions) + 1
+    all_positions = walls | boxes | targets | {worker} # output: {(2,4), (5,3), (1,0), ...}
+    nys = max(y for _, y in all_positions) + 1 # output: {(_,4), (_,3),(_,0)} --> 4
+    nxs = max(x for x, _ in all_positions) + 1 # output: {(2,_), (5,_),(1,_)} --> 5
 
     # construct new warehouse layout
     new_warehouse = []
@@ -402,20 +438,36 @@ def solve_sokoban_elem(warehouse):
     '''
 
     ##         "INSERT YOUR CODE HERE"
+    start_time = time.time()
+    timeout = 180 # 3 mins
+    
     sokoban = SokobanPuzzle(warehouse, macro=False, allow_taboo_push=False)
+    
     if sokoban.goal_test(sokoban.initial):
         return []
     
-    solution_node = search.breadth_first_graph_search(sokoban)
+    search_type = 'fasfdf'
+    if search_type == 'bfs':
+        solution_node = search.breadth_first_graph_search(sokoban)
+    else:
+        solution_node = search.astar_graph_search(sokoban)
+
+    # Check for timeout
+    if time.time() - start_time > timeout:
+        return "Timeout"
+    
     if solution_node is None:
         return 'Impossible'
-    
+
     return solution_node.solution()
 
 def can_go_there(warehouse, dst):
     '''    
     Determine whether the worker can walk to the cell dst=(row,column) 
+    switch because the row is y and column i s x
     without pushing any box.
+
+    overRide the Sokoban Solver, changes the goal and the goal_test
     
     @param warehouse: a valid Warehouse object
 
@@ -423,14 +475,29 @@ def can_go_there(warehouse, dst):
       True if the worker can walk to cell dst=(row,column) without pushing any box
       False otherwise
     '''
-    
+   
     ##         "INSERT YOUR CODE HERE"
     goal = (dst[1], dst[0])
-    goThereSolver = SokobanPuzzle(warehouse, goal=goal, can_push=False)
-            
-    sol_ts = search.breadth_first_graph_search(goThereSolver)
-    return sol_ts is not None
+    start = warehouse.worker
+    obstacles = set(warehouse.walls) | set(warehouse.boxes)
 
+    frontier = [(start, [])]
+    explored = set()
+    
+    while frontier:
+        (x, y), path = frontier.pop(0)
+        if (x, y) == goal:
+            return True
+        
+        if (x, y) not in explored:
+            explored.add((x, y))
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                next_pos = (x + dx, y + dy)
+                if next_pos not in obstacles and next_pos not in explored:
+                    frontier.append((next_pos, path + [next_pos]))
+    
+    return False
+            
 def solve_sokoban_macro(warehouse):
     '''    
     Solve using macro actions the puzzle defined in the warehouse passed as
@@ -449,8 +516,38 @@ def solve_sokoban_macro(warehouse):
         Otherwise return M a sequence of macro actions that solves the puzzle.
         If the puzzle is already in a goal state, simply return []
     '''
+     
     
     ##         "INSERT YOUR CODE HERE"
+    start_time = time.time()
+    timeout = 180 # 3 mins
     
-    raise NotImplementedError()
+    sokoban = SokobanPuzzle(warehouse, allow_taboo_push=False, macro=True) 
+     
+    try:
+        frontier = [(sokoban.initial, [])]
+        explored = set()
+        
+        while frontier:
+            state, path = frontier.pop(0)
+            if sokoban.goal_test(state):
+                return path
+            
+            if state not in explored:
+                explored.add(state)
+                for action in sokoban.actions(state):
+                    new_state = sokoban.result(state, action)
+                    if new_state not in explored:
+                        new_path = path + [action]
+                        frontier.append((new_state, new_path))
+            
+            if time.time() - start_time > timeout:
+                return "Timeout"
+            
+        return "Impossible"
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return "Impossible"
+
 
