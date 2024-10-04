@@ -314,20 +314,19 @@ class SokobanPuzzle(search.Problem):
     def path_cost(self, c, state1, action, state2):
         # record length of path
         return c + 1
-    
+
     def h(self, node):
         """
         Heuristic function for A* search.
         Estimates the cost from the current state to the goal state.
         """
         _, boxes = node.state
-        return sum(min(abs(bx-tx) + abs(by-ty) for tx, ty in self.targets) for bx, by in boxes)
-    
-    # def h_1(self, state):
-    #     return self.manhattan_distance(state)
-    
-    # def h_2(self, state):
-    #     return self.euclidean_distance(state)
+
+        if self.macro:
+            # For macro actions, we might want to use a simpler heuristic
+            return len(boxes) - len(self.targets)
+        else:
+            return sum(min(abs(bx-tx) + abs(by-ty) for tx, ty in self.targets) for bx, by in boxes)
 
 
 
@@ -446,13 +445,16 @@ def solve_sokoban_elem(warehouse):
     if sokoban.goal_test(sokoban.initial):
         return []
     
-    search_type = 'fasfdf'
+    search_type = 'dasfd'
+
+    # use breadth-first search
     if search_type == 'bfs':
         solution_node = search.breadth_first_graph_search(sokoban)
+    # use A* search
     else:
-        solution_node = search.astar_graph_search(sokoban)
+        solution_node = search.astar_graph_search(sokoban, sokoban.h)
 
-    # Check for timeout
+    # check for timeout
     if time.time() - start_time > timeout:
         return "Timeout"
     
@@ -524,27 +526,27 @@ def solve_sokoban_macro(warehouse):
     
     sokoban = SokobanPuzzle(warehouse, allow_taboo_push=False, macro=True) 
      
+    if sokoban.goal_test(sokoban.initial):
+        return [] 
+    
     try:
-        frontier = [(sokoban.initial, [])]
-        explored = set()
+        search_type = 'gdsad'
+
+        # use breadth-first search
+        if search_type == 'bfs':
+            solution_node = search.breadth_first_graph_search(sokoban)
+        # use A* search
+        else:
+            solution_node = search.astar_graph_search(sokoban, sokoban.h)
         
-        while frontier:
-            state, path = frontier.pop(0)
-            if sokoban.goal_test(state):
-                return path
-            
-            if state not in explored:
-                explored.add(state)
-                for action in sokoban.actions(state):
-                    new_state = sokoban.result(state, action)
-                    if new_state not in explored:
-                        new_path = path + [action]
-                        frontier.append((new_state, new_path))
-            
-            if time.time() - start_time > timeout:
+        # check timeout
+        if time.time() - start_time > timeout:
                 return "Timeout"
-            
-        return "Impossible"
+        
+        if solution_node is not None:
+            return solution_node.solution()
+        else:
+            return "Impossible"
     
     except Exception as e:
         print(f"An error occurred: {e}")
