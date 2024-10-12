@@ -13,6 +13,8 @@ import search
 import sokoban
 import numpy as np
 import time
+import math
+from search import Node
 
 def my_team():
     '''
@@ -314,21 +316,109 @@ class SokobanPuzzle(search.Problem):
     def path_cost(self, c, state1, action, state2):
         # record length of path
         return c + 1
+    
+    def manhattan_distance(self, pos1, pos2):
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+
+    def euclidean_distance(self, pos1, pos2):
+        return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
 
     def h(self, node):
         """
         Heuristic function for A* search.
-        Estimates the cost from the current state to the goal state.
+        Estimates the cost(distance) from the current state to the goal state.
+        Evaluates states: It assigns a value to each state in the search space, indicating how "promising" that state is.
+        Guides search: It helps the search algorithm decide which states to explore next.
         """
         _, boxes = node.state
+        boxes = set(boxes) 
+        remaining_targets = self.targets - boxes 
 
-        if self.macro:
-            # For macro actions, we might want to use a simpler heuristic
-            return len(boxes) - len(self.targets)
+        if not remaining_targets:
+            return 0  # All boxes are on targets
+
+        total_cost = 0 
+        for box in boxes - self.targets: 
+            # Find the minimum distance from the box to any target 
+            min_dist = min(self.manhattan_distance(box, target) for target in remaining_targets) 
+            total_cost += min_dist 
+        return total_cost
+        
+        # _, boxes = node.state
+        # boxes = set(boxes)
+        
+        # distance_matrix = []
+        # for box in boxes:
+        #     box_distances = [self.manhattan_distance(box, target) for target in self.targets]
+        #     distance_matrix.append(box_distances)
+        
+        # # Use the Hungarian algorithm to find the minimum cost matching
+        # from scipy.optimize import linear_sum_assignment
+        # row_ind, col_ind = linear_sum_assignment(distance_matrix)
+        
+        # total_cost = sum(distance_matrix[i][j] for i, j in zip(row_ind, col_ind))
+        
+        # return total_cost
+    
+    def verify_consistency(self):
+        # the initial state of the problem
+        initial_state = self.initial
+        # the frontier with the initial state and its cost (0)
+        frontier = [(initial_state, 0)]
+        # keep track of explored states
+        explored = set()
+
+        while frontier:
+            # pops the first state and its associated cost
+            state, cost = frontier.pop(0)
+            if state not in explored:
+                # adds it to the explored set
+                explored.add(state)
+                # the heuristic value of current state and the goal state
+                h_state = self.h(Node(state))
+
+                # loop possible actions
+                for action in self.actions(state):
+                    # each action, generates the child state
+                    child = self.result(state, action)
+                    # the heuristic value of the child state
+                    h_child = self.h(Node(child))
+                    # the step cost from the current state to the child state
+                    step_cost = self.path_cost(0, state, action, child)
+
+                    # checks the consistency condition (h(current state)-h(child state) <= cost(current state to child state))
+                    if h_state > step_cost + h_child:
+                        print(f"Inconsistency found:")
+                        print(f"State: {state}, h(state): {h_state}")
+                        print(f"Child: {child}, h(child): {h_child}")
+                        print(f"Step cost: {step_cost}")
+                        return False
+                    # no inconsistency is found, the child state and its cumulative cost is added to the frontier for further exploration
+                    frontier.append((child, cost + step_cost))
+
+        print("Heuristic is consistent")
+        return True
+
+    def verify_admissibility(self):
+        # calculate the true cost from current state to the goal state (including all necessary moves - player movements between box pushes)
+        def true_cost(state):
+            temp_puzzle = SokobanPuzzle(self.warehouse)
+            temp_puzzle.initial = state
+            solution = search.astar_graph_search(temp_puzzle, self.h)  # Use zero heuristic for true cost
+            return len(solution.solution()) if solution else float('inf')
+        curr_state = self.initial
+        h_value = self.h(Node(curr_state))
+        true_value = true_cost(curr_state)
+        if h_value > true_value:
+                print(f"Inadmissibility found:")
+                print(f"Current State: {curr_state}")
+                print(f"Heuristic Value: {h_value}")
+                print(f"True cost: {true_value}")
+                return False   
         else:
-            return sum(min(abs(bx-tx) + abs(by-ty) for tx, ty in self.targets) for bx, by in boxes)
-
-
+            print(f"Heuristic is admissible")
+            return True
+    
 
 def check_action_seq(warehouse, action_seq):
     '''
@@ -441,18 +531,15 @@ def solve_sokoban_elem(warehouse):
     timeout = 180 # 3 mins
     
     sokoban = SokobanPuzzle(warehouse, macro=False, allow_taboo_push=False)
+    is_consistent = sokoban.verify_consistency()
+    is_admissible = sokoban.verify_admissibility()
+    print(f"Consistent: {is_consistent}; Admissible: {is_admissible}")
     
     if sokoban.goal_test(sokoban.initial):
         return []
     
-    search_type = 'dasfd'
-
-    # use breadth-first search
-    if search_type == 'bfs':
-        solution_node = search.breadth_first_graph_search(sokoban)
-    # use A* search
-    else:
-        solution_node = search.astar_graph_search(sokoban, sokoban.h)
+    # use breadth-first search as default
+    solution_node = search.breadth_first_graph_search(sokoban)
 
     # check for timeout
     if time.time() - start_time > timeout:
@@ -460,7 +547,16 @@ def solve_sokoban_elem(warehouse):
     
     if solution_node is None:
         return 'Impossible'
-
+    
+    # Calculate total cost using path_cost
+    total_cost = 0
+    # get the full path of nodes from the initial state to the goal state
+    path = solution_node.path()
+    # start from 1: each node is compared to its previous node
+    for i in range(1, len(path)):
+        total_cost = sokoban.path_cost(total_cost, path[i-1].state, path[i].action, path[i].state)
+    print('elem total cost:',total_cost)
+    
     return solution_node.solution()
 
 def can_go_there(warehouse, dst):
@@ -480,25 +576,22 @@ def can_go_there(warehouse, dst):
    
     ##         "INSERT YOUR CODE HERE"
     goal = (dst[1], dst[0])
-    start = warehouse.worker
-    obstacles = set(warehouse.walls) | set(warehouse.boxes)
+    sokoban = SokobanPuzzle(warehouse, goal=goal, allow_taboo_push=True, macro=False)      
 
-    frontier = [(start, [])]
-    explored = set()
+    # Override the goal_test method for this specific use case
+    sokoban.goal_test = lambda state: state[0] == goal
     
-    while frontier:
-        (x, y), path = frontier.pop(0)
-        if (x, y) == goal:
-            return True
-        
-        if (x, y) not in explored:
-            explored.add((x, y))
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                next_pos = (x + dx, y + dy)
-                if next_pos not in obstacles and next_pos not in explored:
-                    frontier.append((next_pos, path + [next_pos]))
+    # Override the actions method
+    sokoban.actions = lambda state: [
+        action for action, (dx, dy) in sokoban.directions.items()
+        if (state[0][0] + dx, state[0][1] + dy) not in state[1]
+        and (state[0][0] + dx, state[0][1] + dy) not in sokoban.walls
+    ]
     
-    return False
+    # Use breadth-first search 
+    solution = search.breadth_first_graph_search(sokoban)
+    
+    return solution is not None
             
 def solve_sokoban_macro(warehouse):
     '''    
@@ -525,29 +618,36 @@ def solve_sokoban_macro(warehouse):
     timeout = 180 # 3 mins
     
     sokoban = SokobanPuzzle(warehouse, allow_taboo_push=False, macro=True) 
+    is_consistent = sokoban.verify_consistency()
+    is_admissible = sokoban.verify_admissibility()
+    print(f"Consistent: {is_consistent}; Admissible: {is_admissible}")
      
     if sokoban.goal_test(sokoban.initial):
         return [] 
     
     try:
-        search_type = 'gdsad'
 
-        # use breadth-first search
-        if search_type == 'bfs':
-            solution_node = search.breadth_first_graph_search(sokoban)
-        # use A* search
-        else:
-            solution_node = search.astar_graph_search(sokoban, sokoban.h)
-        
+        # use breadth-first search as default
+        solution_node = search.breadth_first_graph_search(sokoban)
+
         # check timeout
         if time.time() - start_time > timeout:
                 return "Timeout"
         
+        # Calculate total cost using path_cost
+        total_cost = 0
+        # get the full path of nodes from the initial state to the goal state
+        path = solution_node.path()
+        # start from 1: each node is compared to its previous node
+        for i in range(1, len(path)):
+            total_cost = sokoban.path_cost(total_cost, path[i-1].state, path[i].action, path[i].state)
+        print('macro total cost:',total_cost)
+    
         if solution_node is not None:
             return solution_node.solution()
         else:
             return "Impossible"
-    
+        
     except Exception as e:
         print(f"An error occurred: {e}")
         return "Impossible"
