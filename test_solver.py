@@ -32,12 +32,17 @@ def isValidWarehouse(problemFile):
         return False
 
 
-def solve_sokoban_elem(warehouse, search_type="bfs", timeout=180):
+def solve_sokoban(warehouse, search_type="bfs", timeout=180):
+    '''
+    Takes a path to a warehouse file.
+    search_type : bfs, dfs, greedy, astar, uniform
+    timeout: the time in second given to solve a problem
+    '''
     result = [None]
 
     def run_solver():
         try:
-            sokoban = SokobanPuzzle(warehouse, macro=False, allow_taboo_push=False)
+            sokoban = SokobanPuzzle(warehouse, macro=True, allow_taboo_push=False)
             
             # Use breadth-first search
             if search_type == 'bfs':
@@ -53,6 +58,7 @@ def solve_sokoban_elem(warehouse, search_type="bfs", timeout=180):
             if search_type == "uniform":
                 solution_node = search.uniform_cost_search(sokoban)
             if solution_node is None:
+                #catch the None return
                 result[0] = 'Impossible'
             else:
                 result[0] = solution_node.solution()
@@ -83,22 +89,18 @@ def test_solver(result_filename, index_range=[], search_type="bfs"):
         for i in index_range:
             try:
                 filename = f'warehouses/warehouses/warehouse_{i:02}.txt'
-
+                #if the warehouse cannot be loaded, skip
                 if not isValidWarehouse(filename):
                     continue
             except Exception as error:
                 continue
             print(f'Testing {filename }')
             start_time = time.time()
-            if not isValidWarehouse(filename):
-                solutions.append("InvalidWarehouse")
-                file.write(f"{result_filename},0,InvalidWarehouse,0\n")
-                continue
+            # Load the warehouse
             wh = Warehouse()
             wh.load_warehouse(filename)
-            # Load the warehouse
             # Solve the Sokoban puzzle
-            solution = solve_sokoban_elem(wh, search_type=search_type)
+            solution = solve_sokoban(wh, search_type=search_type)
             total_time = time.time() - start_time
             times.append(total_time)
             
@@ -120,14 +122,15 @@ def test_solver(result_filename, index_range=[], search_type="bfs"):
 if __name__ == "__main__":
 
     
-    indexes = list(range(50))
-
+    indexes = list(range(75))
+    filename = "075_macro"
     search_types = [
-    ("aStar", "analyses_results/astar_search_050.txt"),
-    ("bfs", "analyses_results/bfs_search_050.txt"),
-    ("dfs", "analyses_results/dfs_search_050.txt"),
-    ("greedy", "analyses_results/greedy_search_050.txt"),
-    ("uniform", "analyses_results/uniform_search_050.txt")
+    
+    #("bfs", f"analyses_results/bfs_search_{filename}.txt"),
+    #("dfs", f"analyses_results/dfs_search_{filename}.txt"),
+    #("aStar", f"analyses_results/astar_search_{filename}.txt"),
+    #("greedy", f"analyses_results/greedy_search_{filename}.txt"),
+    ("uniform", f"analyses_results/uniform_search_{filename}.txt")
 ]
     
     for search_type, file_path in search_types:
