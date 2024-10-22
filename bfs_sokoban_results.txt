@@ -1,0 +1,204 @@
+File: warehouse_0001.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.006 seconds
+--------------------------------------------------
+File: warehouse_0003.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.072 seconds
+--------------------------------------------------
+File: warehouse_0005.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.000 seconds
+--------------------------------------------------
+File: warehouse_0007.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 1478.875 seconds
+--------------------------------------------------
+File: warehouse_0009.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.007 seconds
+--------------------------------------------------
+File: warehouse_0011.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.068 seconds
+--------------------------------------------------
+File: warehouse_0013.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 1.874 seconds
+--------------------------------------------------
+File: warehouse_0015.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 2.450 seconds
+--------------------------------------------------
+File: warehouse_0017.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.077 seconds
+--------------------------------------------------
+File: warehouse_0019.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 5.043 seconds
+--------------------------------------------------
+File: warehouse_0021.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.017 seconds
+--------------------------------------------------
+File: warehouse_0023.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.032 seconds
+--------------------------------------------------
+File: warehouse_0025.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.064 seconds
+--------------------------------------------------
+File: warehouse_0027.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 5.193 seconds
+--------------------------------------------------
+File: warehouse_0029.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.559 seconds
+--------------------------------------------------
+File: warehouse_0031.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.040 seconds
+--------------------------------------------------
+File: warehouse_0033.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.008 seconds
+--------------------------------------------------
+File: warehouse_0035.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 12.800 seconds
+--------------------------------------------------
+File: warehouse_0037.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 4.236 seconds
+--------------------------------------------------
+File: warehouse_0039.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.000 seconds
+--------------------------------------------------
+File: warehouse_0041.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.097 seconds
+--------------------------------------------------
+File: warehouse_0043.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.531 seconds
+--------------------------------------------------
+File: warehouse_0045.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 1.300 seconds
+--------------------------------------------------
+File: warehouse_0047.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.083 seconds
+--------------------------------------------------
+File: warehouse_0049.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 1.386 seconds
+--------------------------------------------------
+File: warehouse_0051.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.080 seconds
+--------------------------------------------------
+File: warehouse_0053.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.120 seconds
+--------------------------------------------------
+File: warehouse_0055.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.048 seconds
+--------------------------------------------------
+File: warehouse_0057.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.058 seconds
+--------------------------------------------------
+File: warehouse_0059.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.024 seconds
+--------------------------------------------------
+File: warehouse_0061.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.000 seconds
+--------------------------------------------------
+File: warehouse_0063.txt
+Consistent: True
+Admissible: True
+Answer: Impossible
+Time taken: 0.000 seconds
+--------------------------------------------------
+File: warehouse_0065.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 6822.530 seconds
+--------------------------------------------------
+File: warehouse_0067.txt
+Consistent: True
+Admissible: True
+Answer: Solved
+Time taken: 0.026 seconds
+--------------------------------------------------
