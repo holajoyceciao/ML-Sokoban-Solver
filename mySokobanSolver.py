@@ -21,7 +21,7 @@ def my_team():
     e.g.  [ (1234567, 'Ada', 'Lovelace'), (1234568, 'Grace', 'Hopper'), (1234569, 'Eva', 'Tardos') ]
     '''
 
-    raise NotImplementedError()
+    return [(11393611, 'Yu-Ying', 'Tang'), (11371200, 'Arthur', 'Guillaume')]
  
 
 def taboo_cells(warehouse):
@@ -178,16 +178,25 @@ class SokobanPuzzle(search.Problem):
         self.directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
 
         # retrieve key state of the warehouse
+        '''
         self.walls = set()
         self.targets = set()
         self.boxes = set()
         self.worker = tuple()
         self.define_game_state(warehouse)
         self.allow_push = allow_push
+        '''
+        self.walls = set(warehouse.walls)
+        self.targets = set(warehouse.targets)
+        self.boxes = set(warehouse.boxes)
+        self.worker = warehouse.worker
+        self.allow_push = allow_push
+        self.goal = goal
         #need the warehouse for the can_go_there, at the moment
         self.warehouse = warehouse
         self.allow_taboo_push = allow_taboo_push
-        
+         #if true, return push actions
+        self.macro = macro
         
         # get maximum game boundaries
         ## compute number of rows and columns from the layout by joining sets and get maximum
@@ -200,24 +209,19 @@ class SokobanPuzzle(search.Problem):
         #need taboo cell for the lookup in solve_macro
         self.taboo_cells = set(sokoban.find_2D_iterator(self.taboo_layout , "X"))
           
-
-
-        # save the state for type of movement
-    
-        #if true, return push actions
-        self.macro = macro
+       
 
         # save the original state for the warehouse
-        super().__init__((self.worker, frozenset(self.boxes)), goal)
-        self.goal = goal
-        
+        super().__init__((self.worker, frozenset(self.boxes)), goal=goal)
+   
+        '''
     def define_game_state(self, warehouse):
         # retrieve states from the warehouse
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
         self.boxes = set(warehouse.boxes)
         self.worker = warehouse.worker
-    
+        '''
     def actions(self, state):
         """
         Return the list of actions that can be executed in the given state.
@@ -241,6 +245,7 @@ class SokobanPuzzle(search.Problem):
                     for box in boxes:
                         # check it the move is valid, saves time
                         new_box_pos = (box[0] + coordinates[0], box[1] + coordinates[1])#changed order of checks
+                        worker_pos = (box[0] - coordinates[0], box[1] - coordinates[1])
                         # cannot push a box on a wall or an other box
                         if new_box_pos in self.walls.union(boxes):
                             continue
@@ -248,7 +253,7 @@ class SokobanPuzzle(search.Problem):
                         if new_box_pos in self.taboo_cells and not self.allow_taboo_push:#
                             continue
                         # position of the worker next to the box
-                        worker_pos = (box[0] - coordinates[0], box[1] - coordinates[1])
+                        
                         
                         
                         
@@ -333,19 +338,17 @@ class SokobanPuzzle(search.Problem):
     def goal_test(self, state):
         # get current boxes position
         worker, boxes = state
-        if self.goal is not None:
-            return worker == self.goal
-        # check if all boxes are in target positions
-        else:
+        if self.goal is None:
+            # check if all boxes are in target positions
             return all(box in self.targets for box in boxes)
+        else:
+             #if there is a goal, for the can_go_there, instead look if the worker is on on the goal
+            return worker == self.goal
 
     def path_cost(self, c, state1, action, state2):
         # record length of path
         return c + 1
-        
-    def h_1(self, state):
-        return self.manhattan_distance(state)
-        
+             
     def h_2(self, node):
         """
         heuristic for the can go there function
@@ -357,27 +360,6 @@ class SokobanPuzzle(search.Problem):
         distance =abs(player_x - self.goal[0]) + abs(player_y - self.goal[1])  
         return distance
         
-    def euclidean_distance(self, node):
-     # simple heuristic used for can_get_there, is the distance to the goal
-        box_x, box_y = box
-
-        return np.sqrt((box_x - self.goal[0])**2+ (box_y - self.goal[1])**2) 
-
-    def manhattan_distance(self, state):
-    # simple heuristic used for the macro_search, uses the min distance betwenn each box and target as a cost
-        box_x, box_y = box
-        
-        min_box_goal_distance = min(
-            abs(box_x - goal_x) + abs(box_y - goal_y) for goal_x, goal_y in self.targets
-        )
-            
-        return min_box_goal_distance
-        
-        #if boxes:
-        #cost of moving to the nearest box, not implemented beacuse would require the path to reach a point
-         #   player_cost = min(
-         #       abs(box_x - player_x) + abs(box_y - player_y) for box_x, box_y in boxes
-         #   )
         
     def h(self, node):
         """
@@ -419,7 +401,6 @@ class SokobanPuzzle(search.Problem):
 
 def check_action_seq(warehouse, action_seq):
     '''
-    
     Determine if the sequence of actions listed in 'action_seq' is legal or not.
     
     Important notes:
@@ -440,12 +421,74 @@ def check_action_seq(warehouse, action_seq):
                the sequence of actions.  This must be the same string as the
                string returned by the method  Warehouse.__str__()
     '''
-    
     ##         "INSERT YOUR CODE HERE"
+
+    # retrieve states from the warehouse
+    walls = set(warehouse.walls)
+    targets = set(warehouse.targets)
+    boxes = set(warehouse.boxes)
+    worker = warehouse.worker 
+
+    # directions to move in (x, y) -> NOTE: origin at TOP-LEFT
+    directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
     
-    raise NotImplementedError()
+    for action in action_seq:
+        if action not in directions:
+            return 'Failure'
 
+        # get worker position
+        x, y = worker
 
+        # next potential position
+        dx, dy = directions[action]
+        nx, ny = x + dx, y + dy
+
+        # if next position is not reachable (a wall or a box already on a target)
+        if (nx, ny) in walls:
+            return 'Failure'
+
+        # if next position is a box
+        if (nx, ny) in boxes:
+            # need to push box to box'x next position
+            nnx, nny = nx + dx, ny + dy
+
+            # check if box's next position is reachable (can't push into walls or other boxes)
+            if (nnx, nny) in walls or (nnx, nny) in boxes:
+                return 'Failure'
+
+            # move the box to the box's next position
+            boxes.remove((nx, ny))
+            boxes.add((nnx, nny))
+
+        # update worker position to the next position
+        worker = (nx, ny)
+    
+    # compute number of rows and columns from the layout
+    all_positions = walls | boxes | targets | {worker} # output: {(2,4), (5,3), (1,0), ...}
+    nys = max(y for _, y in all_positions) + 1 # output: {(_,4), (_,3),(_,0)} --> 4
+    nxs = max(x for x, _ in all_positions) + 1 # output: {(2,_), (5,_),(1,_)} --> 5
+
+    # construct new warehouse layout
+    new_warehouse = []
+    for y in range(nys):
+        line = []
+        for x in range(nxs):
+            pos = (x, y)  # x and y coordinates with origin at TOP-LEFT
+            if pos in walls:
+                line.append('#')
+            elif pos in boxes and pos in targets:
+                line.append('*')  # box on target
+            elif pos in boxes:
+                line.append('$')  # box
+            elif pos in targets:
+                line.append('.')  # target
+            elif pos == worker:
+                line.append('@' if pos not in targets else '!')  # worker or worker on target
+            else:
+                line.append(' ')  # free space
+        new_warehouse.append(''.join(line))
+    
+    return '\n'.join(new_warehouse)
 
 def solve_sokoban_elem(warehouse):
     '''    
@@ -504,12 +547,6 @@ def can_go_there(warehouse, dst):
 # Define a timeout exception
 class TimeoutException(Exception):
     pass
-
-# Define the signal handler
-def timeout_handler(signum, frame):
-    raise TimeoutException("Computation took too long!")
-
-import signal
 
 def solve_sokoban_macro(warehouse):
     '''    
