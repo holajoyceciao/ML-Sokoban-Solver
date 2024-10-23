@@ -9,11 +9,10 @@ That is, changing the formal parameters of a function will break the
 interface and triggers to a fail for the test of your code.
 '''
 
+
 import search
 import sokoban
-import numpy as np
-import time
-import signal
+import time 
 
 def my_team():
     '''
@@ -22,7 +21,7 @@ def my_team():
     e.g.  [ (1234567, 'Ada', 'Lovelace'), (1234568, 'Grace', 'Hopper'), (1234569, 'Eva', 'Tardos') ]
     '''
 
-    return [(11393611, 'Yu-Ying', 'Tang'), (11371200, 'Arthur', 'Guillaume')]
+    raise NotImplementedError()
  
 
 def taboo_cells(warehouse):
@@ -86,7 +85,6 @@ def taboo_cells(warehouse):
                 warehouse[b_ptr][c] = 'NA'
             b_ptr -= 1
 
-    # check taboo cells
     # rule 1: mark taboo cell at corners
     for r in range(rows):
         for c in range(cols):
@@ -104,7 +102,7 @@ def taboo_cells(warehouse):
                 if r + 1 < rows and c + 1 < cols and warehouse[r + 1][c] == '#' and warehouse[r][c + 1] == '#':
                     warehouse[r][c] = 'X'
 
-    # rule 2: mark taboo cells between two corners along walls
+    # Rule 2: mark taboo cells between two corners along walls
     ## horizontal detection (left to right)
     for r in range(rows):
         left_corner = -1
@@ -141,7 +139,9 @@ def taboo_cells(warehouse):
             if warehouse[r][c] == 'NA':
                 warehouse[r][c] = ' '
 
-    return '\n'.join([''.join(row) for row in warehouse])
+    return '\n'.join([''.join(row) for row in warehouse])  
+ 
+
 
 class SokobanPuzzle(search.Problem):
     '''
@@ -169,6 +169,8 @@ class SokobanPuzzle(search.Problem):
     If self.macro is set True, the 'actions' function should return 
     macro actions. If self.macro is set False, the 'actions' function should 
     return elementary actions.
+    
+    
     '''
     
     def __init__(self, warehouse, goal=None, allow_taboo_push=False, macro=False, allow_push=True):
@@ -176,48 +178,56 @@ class SokobanPuzzle(search.Problem):
         self.directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
 
         # retrieve key state of the warehouse
-        self.walls = set(warehouse.walls)
-        self.targets = set(warehouse.targets)
-        self.boxes = set(warehouse.boxes)
-        self.worker = warehouse.worker
+        self.walls = set()
+        self.targets = set()
+        self.boxes = set()
+        self.worker = tuple()
+        self.define_game_state(warehouse)
         self.allow_push = allow_push
+        #need the warehouse for the can_go_there, at the moment
+        self.warehouse = warehouse
+        self.allow_taboo_push = allow_taboo_push
         
-   
         
         # get maximum game boundaries
         ## compute number of rows and columns from the layout by joining sets and get maximum
-        all_positions = self.walls | self.boxes | self.targets | {self.worker} # output: {(2,4), (5,3), (1,0), ...}
-        self.nys = max(y for _, y in all_positions) + 1 # output: {(_,4), (_,3),(_,0)} --> 4
-        self.nxs = max(x for x, _ in all_positions) + 1 # output: {(2,_), (5,_),(1,_)} --> 5
+        all_positions = self.walls | self.boxes | self.targets | {self.worker}
+        self.nys = max(y for _, y in all_positions) + 1
+        self.nxs = max(x for x, _ in all_positions) + 1
 
         # get taboo cell from the function to know if a position is 'X'
         self.taboo_layout = taboo_cells(warehouse).splitlines()
         #need taboo cell for the lookup in solve_macro
         self.taboo_cells = set(sokoban.find_2D_iterator(self.taboo_layout , "X"))
+          
+
 
         # save the state for type of movement
-        self.allow_taboo_push = allow_taboo_push
-        #need the warehouse for the can_go_there, at the moment
-        self.warehouse = warehouse
+    
+        #if true, return push actions
         self.macro = macro
-      
+
         # save the original state for the warehouse
-        super().__init__((self.worker, frozenset(self.boxes)))
+        super().__init__((self.worker, frozenset(self.boxes)), goal)
         self.goal = goal
         
-
+    def define_game_state(self, warehouse):
+        # retrieve states from the warehouse
+        self.walls = set(warehouse.walls)
+        self.targets = set(warehouse.targets)
+        self.boxes = set(warehouse.boxes)
+        self.worker = warehouse.worker
+    
     def actions(self, state):
         """
         Return the list of actions that can be executed in the given state.
         """
         # get CURRENT worker position from the state
-        # worker = (x, y); boxes (hashset) = {(x, y), (x, y) ...} -> They are the LATEST state not initial
+        ## worker = (x, y); boxes (hashset) = {(x, y), (x, y) ...} -> They are the LATEST state not initial
         worker, boxes = state
         x, y = worker
-
         # legal action for the worker
         possible_actions = []
-        # iterate over 4 directions { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
         for move, coordinates in self.directions.items():
             dx, dy = coordinates
             # next potential position by adding the updating (x, y) position
@@ -278,8 +288,9 @@ class SokobanPuzzle(search.Problem):
         # get current worker position from the state
         worker, boxes = state
         x, y = worker
-
+        
         if self.macro:
+######### MACRO RESULT ##########################################################
             box, direction = action
             box = (box[1], box[0])  # Convert to (x, y) format
             dx, dy = self.directions[direction]
@@ -289,125 +300,52 @@ class SokobanPuzzle(search.Problem):
             new_boxes.add(new_box)
             new_worker = box
             return (new_worker, frozenset(new_boxes))
+######## MICRO RESULT ###########################################################
         
         else:
             # directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
             dx, dy = self.directions[action]
-
+        
             # next position for the worker (x, y) -> (nx, ny)
             nx, ny = x + dx, y + dy 
-
+    
             # if the new location is a box, worker will push the box
             if (nx, ny) in boxes:
-                # find the 'box's next position'
+                # find the 'next next position'
                 nnx, nny = nx + dx, ny + dy
-
+    
                 # push the box to the new position
                 new_boxes = set(boxes)
                 new_boxes.remove((nx, ny))
                 new_boxes.add((nnx, nny))
-
+    
                 # return new state with updated worker and boxes positions
                 return ((nx, ny), frozenset(new_boxes))
-
+    
             # if worker is moving to a vacant space
             else:
                 # return new state with updated worker position
                 return ((nx, ny), boxes)
+        
+            # if action is not legal, should not happen
+            raise Exception('Invalid action')
 
     def goal_test(self, state):
         # get current boxes position
         worker, boxes = state
-        
-        if self.goal is None:
-            # check if all boxes are in target positions
-            return all(box in self.targets for box in boxes)
-        else:
-           
-             #if there is a goal, for the can_go_there, instead look if the worker is on on the goal
+        if self.goal is not None:
             return worker == self.goal
+        # check if all boxes are in target positions
+        else:
+            return all(box in self.targets for box in boxes)
 
     def path_cost(self, c, state1, action, state2):
-        
-        return c+1
-    def print_solution(self, goal_node):
-
-        path = goal_node.path()
-
-        print( f"Solution takes {len(path)-1} steps from the initial state to the goal state\n")
-        print( "Below is the sequence of moves\n")
-        moves = []
-        for node in path:
-            if node.action:
-                moves.append(node.action)
-        return(moves)
-    '''
-    def path_cost_test(self, c, state1, action, state2):
         # record length of path
-        """
-        return the cost of going from state1 to state2 via an action
-        the deafult cost of a move is 1
-        we will add a higher cost to moving a box: 2
-        we will add an higher cost to moving a box out of a target: 3
-        """
-        action_cost = c +1
-        #default move cost is 1
+        return c + 1
         
-        worker_1, boxes_1 = state1
-        worker_2, boxes_2 = state2
-        #check if a box has changed position
-        box_pushed = boxes_1 != boxes_2
-        previous_position = None
-        next_position = None
-        if box_pushed:
-        #find the box
-            action_cost +=1
-            for box in boxes_1:
-                if box not in boxes_2:
-                    previous_position = box
-
-        if previous_position is not None:
-         #find the new position
-            for box in boxes_2:
-                if box not in boxes_1:
-                    next_position = box
-            if previous_position in self.targets and next_position not in self.targets:
-                #check if the box has been move out of a target
-                action_cost += 1
-        return action_cost
-
-    '''
-    
-    def euclidean_distance(self, box):
-
-        box_x, box_y = box
-
-        return np.sqrt((box_x - self.goal[0])**2+ (box_y - self.goal[1])**2)   
-
-    def manhattan_distance(self, box):
-    # simple heuristic used for the macro_search, uses the min distance betwenn each box and target as a cost
-        box_x, box_y = box
-       
-        min_box_goal_distance = min(
-            abs(box_x - goal_x) + abs(box_y - goal_y) for goal_x, goal_y in self.targets
-        )
-            
-        return min_box_goal_distance
-
-    def h_ontarget(self, node):
-        '''
-        INPUT: a problem node
-        OUTPUT: the number of box not in target.
-        '''
-        count = 0
-
-        state = node.state
-
-        for box in state[1]:
-            if box not in self.target:
-                count += 1
-        return count
-
+    def h_1(self, state):
+        return self.manhattan_distance(state)
+        
     def h_2(self, node):
         """
         heuristic for the can go there function
@@ -418,8 +356,29 @@ class SokobanPuzzle(search.Problem):
         # using Manhattan Distance
         distance =abs(player_x - self.goal[0]) + abs(player_y - self.goal[1])  
         return distance
-    
+        
+    def euclidean_distance(self, node):
+     # simple heuristic used for can_get_there, is the distance to the goal
+        box_x, box_y = box
 
+        return np.sqrt((box_x - self.goal[0])**2+ (box_y - self.goal[1])**2) 
+
+    def manhattan_distance(self, state):
+    # simple heuristic used for the macro_search, uses the min distance betwenn each box and target as a cost
+        box_x, box_y = box
+        
+        min_box_goal_distance = min(
+            abs(box_x - goal_x) + abs(box_y - goal_y) for goal_x, goal_y in self.targets
+        )
+            
+        return min_box_goal_distance
+        
+        #if boxes:
+        #cost of moving to the nearest box, not implemented beacuse would require the path to reach a point
+         #   player_cost = min(
+         #       abs(box_x - player_x) + abs(box_y - player_y) for box_x, box_y in boxes
+         #   )
+        
     def h(self, node):
         """
         Heuristic function for A* search.
@@ -437,11 +396,30 @@ class SokobanPuzzle(search.Problem):
             boxes_cost += min_box_goal_distance
 
         return boxes_cost
+        
+    
+    def value(self, state):
+        """For optimization problems, each state has a value.  Hill-climbing
+        and related algorithms try to maximize this value."""
+        raise NotImplementedError
+        
+    def print_solution(self, goal_node):
 
+        path = goal_node.path()
 
+        print( f"Solution takes {len(path)-1} steps from the initial state to the goal state\n")
+        print( "Below is the sequence of moves\n")
+        moves = []
+        for node in path:
+            if node.action:
+                moves.append(node.action)
+        return(moves)
+      
+        
 
 def check_action_seq(warehouse, action_seq):
     '''
+    
     Determine if the sequence of actions listed in 'action_seq' is legal or not.
     
     Important notes:
@@ -462,82 +440,10 @@ def check_action_seq(warehouse, action_seq):
                the sequence of actions.  This must be the same string as the
                string returned by the method  Warehouse.__str__()
     '''
+    
     ##         "INSERT YOUR CODE HERE"
-
-    # retrieve states from the warehouse
-    walls = set(warehouse.walls)
-    targets = set(warehouse.targets)
-    boxes = set(warehouse.boxes)
-    worker = warehouse.worker 
-
-    # directions to move in (x, y) -> NOTE: origin at TOP-LEFT
-    directions = { 'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1) }
     
-    for action in action_seq:
-        if action not in directions:
-            return 'Failure'
-
-        # get worker position
-        x, y = worker
-
-        # next potential position
-        dx, dy = directions[action]
-        nx, ny = x + dx, y + dy
-
-        # if next position is not reachable (a wall or a box already on a target)
-        if (nx, ny) in walls:
-            return 'Failure'
-
-        # if next position is a box
-        if (nx, ny) in boxes:
-            # need to push box to box'x next position
-            nnx, nny = nx + dx, ny + dy
-
-            # check if box's next position is reachable (can't push into walls or other boxes)
-            if (nnx, nny) in walls or (nnx, nny) in boxes:
-                return 'Failure'
-
-            # move the box to the box's next position
-            boxes.remove((nx, ny))
-            boxes.add((nnx, nny))
-
-        # update worker position to the next position
-        worker = (nx, ny)
-    
-    # compute number of rows and columns from the layout
-    all_positions = walls | boxes | targets | {worker} # output: {(2,4), (5,3), (1,0), ...}
-    nys = max(y for _, y in all_positions) + 1 # output: {(_,4), (_,3),(_,0)} --> 4
-    nxs = max(x for x, _ in all_positions) + 1 # output: {(2,_), (5,_),(1,_)} --> 5
-
-    # construct new warehouse layout
-    new_warehouse = []
-    for y in range(nys):
-        line = []
-        for x in range(nxs):
-            pos = (x, y)  # x and y coordinates with origin at TOP-LEFT
-            if pos in walls:
-                line.append('#')
-            elif pos in boxes and pos in targets:
-                line.append('*')  # box on target
-            elif pos in boxes:
-                line.append('$')  # box
-            elif pos in targets:
-                line.append('.')  # target
-            elif pos == worker:
-                line.append('@' if pos not in targets else '!')  # worker or worker on target
-            else:
-                line.append(' ')  # free space
-        new_warehouse.append(''.join(line))
-    
-    return '\n'.join(new_warehouse)
-
-
-class TimeoutException(Exception):
-    pass
-
-# Define the signal handler
-def timeout_handler(signum, frame):
-    raise TimeoutException("Computation took too long!")
+    raise NotImplementedError()
 
 
 
@@ -555,44 +461,25 @@ def solve_sokoban_elem(warehouse):
             For example, ['Left', 'Down', Down','Right', 'Up', 'Down']
             If the puzzle is already in a goal state, simply return []
     '''
-
+    
     ##         "INSERT YOUR CODE HERE"
-    signal.signal(signal.SIGALRM, timeout_handler)
-
-    timeout = 500 # 3 mins
-    
-    signal.alarm(timeout)  # Set the alarm for 5 minutes
-    start_time = time.time()
-   
-    try:
-        sokoban = SokobanPuzzle(warehouse, macro=False, allow_taboo_push=False)
-        
-        if sokoban.goal_test(sokoban.initial):
-            return []
-        
-        search_type = 'dasfd'
-
-        # use breadth-first search
-        if search_type == 'bfs':
-            solution_node = search.breadth_first_graph_search(sokoban)
-        # use A* search
-        else:
-            solution_node = search.astar_graph_search(sokoban, sokoban.h)
-
-        if solution_node is None:
-            return 'Impossible'
-        
-        return solution_node.solution()
-        
-    except TimeoutException:
-        return "Timeout"
-    
-    finally:
-        # Cancel the alarm after completion or timeout
-        signal.alarm(0)
 
     
+    solver = SokobanPuzzle(warehouse)
 
+    sol_ts = search.astar_graph_search(solver, solver.h)
+
+    if sol_ts is not None:
+        return solver.print_solution(sol_ts)
+    else:
+        return "Impossible"
+    
+
+
+
+import numpy as np
+
+            
 def can_go_there(warehouse, dst):
     '''    
     Determine whether the worker can walk to the cell dst=(row,column) 
@@ -609,15 +496,21 @@ def can_go_there(warehouse, dst):
     '''
    
     ##         "INSERT YOUR CODE HERE"
-    
     goal = (dst[1], dst[0])
-    can_go_sokoban = SokobanPuzzle(warehouse, goal=goal, allow_push=False)
-    sol_ts = search.best_first_graph_search(can_go_sokoban, can_go_sokoban.h_2)
-    if sol_ts is not None:
-        return True
-    else:
-        return False
-            
+    goThereSolver = SokobanPuzzle(warehouse, goal=goal,allow_push=False)      
+    sol_ts = search.breadth_first_graph_search(goThereSolver)
+    return sol_ts is not None
+
+# Define a timeout exception
+class TimeoutException(Exception):
+    pass
+
+# Define the signal handler
+def timeout_handler(signum, frame):
+    raise TimeoutException("Computation took too long!")
+
+import signal
+
 def solve_sokoban_macro(warehouse):
     '''    
     Solve using macro actions the puzzle defined in the warehouse passed as
@@ -639,27 +532,16 @@ def solve_sokoban_macro(warehouse):
      
     
     ##         "INSERT YOUR CODE HERE"
-    sokoban = SokobanPuzzle(warehouse, allow_taboo_push=False, macro=True) 
-
-   
-
-    # use breadth-first search as default
-    solution_node = search.astar_graph_search(sokoban, sokoban.h)
-
- 
+    #find reachable box       
     
-    if solution_node is None:
+    macroSolver = SokobanPuzzle(warehouse, allow_taboo_push=False, macro=True)        
+    # Perform A* search
+    sol_ts = search.breadth_first_graph_search(macroSolver)
+        
+    # Check if a solution was found
+    if sol_ts is not None:
+        return macroSolver.print_solution(sol_ts)
+    else:
         return "Impossible"
+
     
-    # Calculate total cost using path_cost
-    total_cost = 0
-    # get the full path of nodes from the initial state to the goal state
-    path = solution_node.path()
-    # start from 1: each node is compared to its previous node
-    for i in range(1, len(path)):
-        total_cost = sokoban.path_cost(total_cost, path[i-1].state, path[i].action, path[i].state)
-    print('macro total cost:',total_cost)
-
-    return solution_node.solution()
-
-
