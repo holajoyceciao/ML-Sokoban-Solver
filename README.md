@@ -1,3 +1,2 @@
-# IFN680 2024 Sem2 Project
+# ML Sokoban Solver 
 
-**Goal**: --
